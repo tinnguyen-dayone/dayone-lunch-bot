@@ -17,15 +17,14 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Create deployment directory
+      - name: Install dependencies
         run: |
-          mkdir -p deploy
-          cp -r * deploy/
-          cp .env deploy/ || true
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Create service file
         run: |
-          cat > deploy/discord-bot.service << EOF
+          cat > discord-bot.service << EOF
           [Unit]
           Description=Discord Bot Service
           After=network.target
@@ -53,15 +52,16 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          # Create remote directory
+          # Stop existing service
           ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} '
-            mkdir -p ~/discord-bot
-            sudo systemctl stop discord-bot || true'
+            sudo systemctl stop discord-bot || true
+            mkdir -p ~/discord-bot'
 
-          # Copy files
-          scp -i ~/.ssh/lunchbot.pem -r deploy/* ubuntu@${{ secrets.EC2_HOST }}:~/discord-bot/
+          # Copy project files
+          scp -i ~/.ssh/lunchbot.pem -r ./* ubuntu@${{ secrets.EC2_HOST }}:~/discord-bot/
+          scp -i ~/.ssh/lunchbot.pem discord-bot.service ubuntu@${{ secrets.EC2_HOST }}:~/discord-bot/
 
-          # Setup and restart service
+          # Setup and start service
           ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} '
             cd ~/discord-bot &&
             python3 -m venv venv &&
@@ -71,8 +71,7 @@ jobs:
             sudo mv discord-bot.service /etc/systemd/system/ &&
             sudo systemctl daemon-reload &&
             sudo systemctl enable discord-bot &&
-            sudo systemctl start discord-bot &&
-            sudo systemctl status discord-bot'
+            sudo systemctl start discord-bot'
 
       - name: Verify Deployment
         run: |
