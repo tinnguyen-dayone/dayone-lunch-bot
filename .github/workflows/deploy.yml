@@ -43,26 +43,33 @@ jobs:
           WantedBy=multi-user.target
           EOF
 
-      - name: Configure SSH
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          mkdir -p ~/.ssh/
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/lunchbot.pem
-          chmod 600 ~/.ssh/lunchbot.pem
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          eval $(ssh-agent -s)
+          echo "$SSH_PRIVATE_KEY" > lunchbot.pem
+          chmod 600 lunchbot.pem
+          mkdir -p ~/.ssh
+          echo "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
       - name: Deploy to EC2
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           # Stop existing service
-          ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} '
+          ssh -i lunchbot.pem ubuntu@$SSH_HOST '
             sudo systemctl stop discord-bot || true
             mkdir -p ~/discord-bot'
 
           # Copy project files
-          scp -i ~/.ssh/lunchbot.pem -r ./* ubuntu@${{ secrets.EC2_HOST }}:~/discord-bot/
-          scp -i ~/.ssh/lunchbot.pem discord-bot.service ubuntu@${{ secrets.EC2_HOST }}:~/discord-bot/
+          scp -i lunchbot.pem -r ./* ubuntu@$SSH_HOST:~/discord-bot/
+          scp -i lunchbot.pem discord-bot.service ubuntu@$SSH_HOST:~/discord-bot/
 
           # Setup and start service
-          ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} '
+          ssh -i lunchbot.pem ubuntu@$SSH_HOST '
             cd ~/discord-bot &&
             python3 -m venv venv &&
             source venv/bin/activate &&
@@ -74,6 +81,8 @@ jobs:
             sudo systemctl start discord-bot'
 
       - name: Verify Deployment
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           sleep 10
-          ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} 'systemctl is-active discord-bot'
+          ssh -i lunchbot.pem ubuntu@$SSH_HOST 'systemctl is-active discord-bot'
