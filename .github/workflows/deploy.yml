@@ -1,0 +1,80 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Create deployment directory
+        run: |
+          mkdir -p deploy
+          cp -r * deploy/
+          cp .env deploy/ || true
+
+      - name: Create service file
+        run: |
+          cat > deploy/discord-bot.service << EOF
+          [Unit]
+          Description=Discord Bot Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=ubuntu
+          WorkingDirectory=/home/ubuntu/discord-bot
+          Environment="DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}"
+          Environment="DB_URL=${{ secrets.DB_URL }}"
+          ExecStart=/home/ubuntu/discord-bot/venv/bin/python main.py
+          Restart=always
+          RestartSec=1
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/lunchbot.pem
+          chmod 600 ~/.ssh/lunchbot.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        run: |
+          # Create remote directory
+          ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} '
+            mkdir -p ~/discord-bot
+            sudo systemctl stop discord-bot || true'
+
+          # Copy files
+          scp -i ~/.ssh/lunchbot.pem -r deploy/* ubuntu@${{ secrets.EC2_HOST }}:~/discord-bot/
+
+          # Setup and restart service
+          ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} '
+            cd ~/discord-bot &&
+            python3 -m venv venv &&
+            source venv/bin/activate &&
+            pip install --upgrade pip &&
+            pip install -r requirements.txt &&
+            sudo mv discord-bot.service /etc/systemd/system/ &&
+            sudo systemctl daemon-reload &&
+            sudo systemctl enable discord-bot &&
+            sudo systemctl start discord-bot &&
+            sudo systemctl status discord-bot'
+
+      - name: Verify Deployment
+        run: |
+          sleep 10
+          ssh -i ~/.ssh/lunchbot.pem ubuntu@${{ secrets.EC2_HOST }} 'systemctl is-active discord-bot'
