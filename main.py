@@ -40,9 +40,13 @@ db_manager = DatabaseManager(DB_URL)
 # Pass the db_manager instance to other modules if necessary
 # For example, you might need to modify how DatabaseManager is accessed in other files
 
-# Setup commands and events
-setup_commands(bot)
-setup_events(bot)
+# Prevent multiple setups
+if not getattr(bot, 'commands_setup', False):
+    setup_commands(bot)
+    bot.commands_setup = True
+if not getattr(bot, 'events_setup', False):
+    setup_events(bot)
+    bot.events_setup = True
 
 if __name__ == "__main__":
     try:
