@@ -43,33 +43,31 @@ jobs:
           WantedBy=multi-user.target
           EOF
 
-      - name: Setup SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          SSH_HOST: ${{ secrets.EC2_HOST }}
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add host key
         run: |
-          eval $(ssh-agent -s)
-          echo "$SSH_PRIVATE_KEY" > lunchbot.pem
-          chmod 600 lunchbot.pem
           mkdir -p ~/.ssh
-          echo "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to EC2
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           # Stop existing service
-          ssh -i lunchbot.pem ubuntu@$SSH_HOST '
+          ssh ubuntu@$SSH_HOST '
             sudo systemctl stop discord-bot || true
             mkdir -p ~/discord-bot'
 
           # Copy project files
-          scp -i lunchbot.pem -r ./* ubuntu@$SSH_HOST:~/discord-bot/
-          scp -i lunchbot.pem discord-bot.service ubuntu@$SSH_HOST:~/discord-bot/
+          scp -r ./* ubuntu@$SSH_HOST:~/discord-bot/
+          scp discord-bot.service ubuntu@$SSH_HOST:~/discord-bot/
 
           # Setup and start service
-          ssh -i lunchbot.pem ubuntu@$SSH_HOST '
+          ssh ubuntu@$SSH_HOST '
             cd ~/discord-bot &&
             python3 -m venv venv &&
             source venv/bin/activate &&
@@ -85,4 +83,4 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           sleep 10
-          ssh -i lunchbot.pem ubuntu@$SSH_HOST 'systemctl is-active discord-bot'
+          ssh ubuntu@$SSH_HOST 'systemctl is-active discord-bot'
