@@ -43,31 +43,31 @@ jobs:
           WantedBy=multi-user.target
           EOF
 
-      - name: Configure SSH
-        env:
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SSH_HOST: ${{ secrets.EC2_HOST }}
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      - name: Add host key
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to EC2
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           # Stop existing service
-          ssh -i ~/.ssh/id_rsa ubuntu@$SSH_HOST '
+          ssh ubuntu@$SSH_HOST '
             sudo systemctl stop discord-bot || true
             mkdir -p ~/discord-bot'
 
           # Copy project files
-          scp -i ~/.ssh/id_rsa -r ./* ubuntu@$SSH_HOST:~/discord-bot/
-          scp -i ~/.ssh/id_rsa discord-bot.service ubuntu@$SSH_HOST:~/discord-bot/
+          scp -r ./* ubuntu@$SSH_HOST:~/discord-bot/
+          scp discord-bot.service ubuntu@$SSH_HOST:~/discord-bot/
 
           # Setup and start service
-          ssh -i ~/.ssh/id_rsa ubuntu@$SSH_HOST '
+          ssh ubuntu@$SSH_HOST '
             cd ~/discord-bot &&
             python3 -m venv venv &&
             source venv/bin/activate &&
@@ -83,4 +83,4 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           sleep 10
-          ssh -i ~/.ssh/id_rsa ubuntu@$SSH_HOST 'systemctl is-active discord-bot'
+          ssh ubuntu@$SSH_HOST 'systemctl is-active discord-bot'
