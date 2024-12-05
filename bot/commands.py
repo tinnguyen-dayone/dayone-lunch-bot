@@ -82,7 +82,7 @@ def setup_commands(bot):
                         view=PaymentView(user, ticket_channel, ctx.author, transaction_id)
                     )
                     # Store the new message ID in the database
-                    db_manager.set_user_ticket_message_id(user.id, sent_message.id)
+                    db_manager.set_user_ticket_message_id(transaction_id, sent_message.id)  # Changed from user.id to transaction_id
                     logging.info(f"Ticket created for user {user.name} with transaction ID {transaction_id} and message ID {sent_message.id}.")
                 except discord.Forbidden:
                     await ctx.send(f"Unable to send message to ticket channel for {user.mention}")

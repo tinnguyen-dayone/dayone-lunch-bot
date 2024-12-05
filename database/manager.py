@@ -271,3 +271,14 @@ class DatabaseManager:
     def __del__(self):
         """Destructor to ensure database connection is closed"""
         self.close()
+
+    def set_user_ticket_message_id(self, transaction_id, message_id):
+        """Set the ticket message ID for a transaction"""
+        logging.debug(f"Setting ticket_message_id: {message_id} for transaction_id: {transaction_id}")
+        with self.conn.cursor() as cursor:
+            cursor.execute('''
+                UPDATE transactions
+                SET ticket_message_id = %s
+                WHERE transaction_id = %s
+            ''', (message_id, transaction_id))
+        self.conn.commit()
