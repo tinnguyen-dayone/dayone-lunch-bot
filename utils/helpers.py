@@ -6,7 +6,7 @@ async def create_ticket_channel(guild, author, user):
     if not category:
         category = await guild.create_category("Lunch Tickets")
 
-    channel_name = f"{user.name}"
+    channel_name = f"ticket-{user.name}"  # Changed to include 'ticket-' prefix
     existing_channel = get(guild.text_channels, name=channel_name)
     if existing_channel:
         return existing_channel

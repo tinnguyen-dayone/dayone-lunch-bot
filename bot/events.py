@@ -1,6 +1,6 @@
 import logging
 from discord.ext import commands
-import discord  # Added import
+import discord
 from utils.helpers import create_ticket_channel
 from bot.views import user_last_image
 
