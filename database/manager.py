@@ -7,7 +7,6 @@ class DatabaseManager:
     def __init__(self, db_url, retries=10, delay=5):  # Increased retries to 10
         """Initialize database connection with retries"""
         self.db_url = db_url
-        self.conn = None  # Initialize to None
         for attempt in range(1, retries + 1):
             try:
                 self.conn = psycopg2.connect(self.db_url)

@@ -14,5 +14,5 @@ RUN pip install -r requirements.txt
 # Copy project files without .env
 COPY . .
 
-# Set CMD to run the application directly
-CMD ["python", "main.py"]
+# Set CMD to run the application directly with unbuffered output
+CMD ["python", "-u", "main.py"]  # Added -u for unbuffered stdout/stderr
