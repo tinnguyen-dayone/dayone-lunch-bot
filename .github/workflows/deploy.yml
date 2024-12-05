@@ -50,7 +50,9 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
-          ssh ubuntu@$SSH_HOST << 'EOF'
+          ssh -tt ubuntu@$SSH_HOST << EOF
+            set -e  # Exit immediately if a command exits with a non-zero status
+
             if ! command -v docker &> /dev/null
             then
               curl -fsSL https://get.docker.com -o get-docker.sh
@@ -59,21 +61,31 @@ jobs:
               newgrp docker
             fi
 
-            # Ensure Docker Compose is installed
+            # Ensure Docker Compose is installed correctly
             if ! command -v docker-compose &> /dev/null
             then
               sudo curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
+              # Verify installation
+              docker-compose --version
             fi
 
-            # Log in to GitHub Container Registry
+            # Log in to GitHub Container Registry with non-interactive login
             echo "${GHCR_PAT}" | docker login ghcr.io -u tinnguyen-dayone --password-stdin
 
             # Pull the latest Docker image from GHCR
             docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
+            # Navigate to the project directory
+            cd ~/discord-bot || { mkdir ~/discord-bot && cd ~/discord-bot; }
+
+            # Ensure docker-compose.yml exists
+            if [ ! -f docker-compose.yml ]; then
+              echo "docker-compose.yml not found in ~/discord-bot directory."
+              exit 1
+            fi
+
             # Stop existing containers if any
-            cd ~/discord-bot || mkdir ~/discord-bot && cd ~/discord-bot
             docker-compose down || true
 
             # Update docker-compose.yml to use the pulled image
