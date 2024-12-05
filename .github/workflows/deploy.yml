@@ -53,6 +53,21 @@ jobs:
           ssh -tt ubuntu@$SSH_HOST << EOF
             set -e  # Exit immediately if a command exits with a non-zero status
 
+            # Install Git if not available
+            if ! command -v git &> /dev/null
+            then
+              sudo apt-get update
+              sudo apt-get install -y git
+            fi
+
+            # Clone repository if ~/discord-bot doesn't exist
+            if [ ! -d ~/discord-bot ]; then
+              git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
+            else
+              cd ~/discord-bot
+              git pull
+            fi
+
             if ! command -v docker &> /dev/null
             then
               curl -fsSL https://get.docker.com -o get-docker.sh
@@ -87,6 +102,21 @@ jobs:
 
             # Stop existing containers if any
             docker-compose down || true
+
+
+            # Update docker-compose.yml to use the pulled image
+            sed -i 's|image: .*|image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest|' docker-compose.yml
+
+            # Start the service using Docker Compose
+            docker-compose up -d --pull always
+          EOF
+
+      - name: Verify Deployment
+        env:
+          SSH_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          sleep 20
+          ssh ubuntu@$SSH_HOST 'docker-compose ps'
 
             # Update docker-compose.yml to use the pulled image
             sed -i 's|image: .*|image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest|' docker-compose.yml
