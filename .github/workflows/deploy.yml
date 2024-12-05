@@ -87,9 +87,10 @@ jobs:
             # Pull the latest Docker image
             docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
-            # Run the new container
+            # Run the new container with host network
             docker run -d \
               --name dayone-lunch-bot \
+              --network host \  # Added network host
               --env DISCORD_TOKEN=${DISCORD_TOKEN} \
               --env DB_URL=${DB_URL} \
               --env LUNCH_PRICE=${LUNCH_PRICE} \
