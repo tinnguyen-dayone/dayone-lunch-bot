@@ -27,7 +27,7 @@ from bot.events import setup_events
 
 # Adjust discord library logging
 discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.DEBUG)
+discord_logger.setLevel(logging.INFO)
 
 # Load environment variables
 load_dotenv()
