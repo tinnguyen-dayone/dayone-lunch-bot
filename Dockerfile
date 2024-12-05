@@ -15,7 +15,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Install netcat for the wait script
-RUN apt-get update && apt-get install -y netcat && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
 
 # Add wait-for-postgres script
 COPY wait-for-postgres.sh /usr/local/bin/wait-for-postgres.sh
