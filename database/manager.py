@@ -13,29 +13,7 @@ class DatabaseManager:
         self.conn = None
         for attempt in range(1, retries + 1):
             try:
-                # Add connection options with proper authentication
-                conn_params = {
-                    'connect_timeout': 10,
-                    'application_name': 'dayone-lunch-bot',
-                    'keepalives': 1,
-                    'keepalives_idle': 30,
-                    'keepalives_interval': 10,
-                    'keepalives_count': 5,
-                    'sslmode': 'disable'  # Explicitly disable SSL
-                }
-                
-                # Parse connection string to get components
-                from urllib.parse import urlparse
-                url = urlparse(self.db_url)
-                conn_params.update({
-                    'dbname': url.path[1:],
-                    'user': url.username,
-                    'password': url.password,
-                    'host': url.hostname,
-                    'port': url.port or 5432
-                })
-                
-                self.conn = psycopg2.connect(**conn_params)
+                self.conn = psycopg2.connect(self.db_url)
                 logging.info("Database connection established successfully.")
                 break
             except Exception as e:
