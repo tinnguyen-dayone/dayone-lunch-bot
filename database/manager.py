@@ -12,8 +12,17 @@ class DatabaseManager:
         self.db_url = db_url
         for attempt in range(1, retries + 1):
             try:
-                self.conn = psycopg2.connect(self.db_url)
-                logging.info("Database connection established.")
+                # Add connection options to force TCP/IP
+                conn_params = {
+                    'connect_timeout': 10,
+                    'application_name': 'dayone-lunch-bot',
+                    'keepalives': 1,
+                    'keepalives_idle': 30,
+                    'keepalives_interval': 10,
+                    'keepalives_count': 5
+                }
+                self.conn = psycopg2.connect(self.db_url, **conn_params)
+                logging.info("Database connection established successfully.")
                 break
             except psycopg2.OperationalError as e:
                 logging.error(f"Attempt {attempt}: Failed to connect to the database: {e}")
@@ -21,7 +30,7 @@ class DatabaseManager:
                     logging.info(f"Retrying in {delay} seconds...")
                     time.sleep(delay)
                 else:
-                    logging.error("All retry attempts failed.")
+                    logging.error("All retry attempts failed. Please check your database connection settings.")
                     raise
         self.create_tables()
 
