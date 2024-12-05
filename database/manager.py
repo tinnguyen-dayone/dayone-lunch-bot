@@ -4,7 +4,7 @@ from psycopg2.extras import DictCursor
 import time
 
 class DatabaseManager:
-    def __init__(self, db_url, retries=5, delay=5):
+    def __init__(self, db_url, retries=10, delay=5):  # Increased retries to 10
         """Initialize database connection with retries"""
         self.db_url = db_url
         for attempt in range(1, retries + 1):
@@ -24,33 +24,39 @@ class DatabaseManager:
 
     def create_tables(self):
         """Create necessary database tables"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id BIGINT PRIMARY KEY,
-                total_unpaid NUMERIC DEFAULT 0.0
-            )
-        ''')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS transactions (
-                transaction_id SERIAL PRIMARY KEY,
-                user_id BIGINT REFERENCES users(user_id),
-                commented_count INTEGER DEFAULT 0,
-                lunch_price TEXT,
-                total_price NUMERIC DEFAULT 0.0,
-                transaction_image TEXT,
-                transaction_confirmed BOOLEAN DEFAULT FALSE,
-                transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                paid BOOLEAN DEFAULT FALSE,
-                ticket_message_id BIGINT
-            )
-        ''')
-        # Modify users table to include ticket_message_id
-        cursor.execute('''
-            ALTER TABLE users
-            ADD COLUMN IF NOT EXISTS ticket_message_id BIGINT
-        ''')
-        self.conn.commit()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    total_unpaid NUMERIC DEFAULT 0.0
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS transactions (
+                    transaction_id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    commented_count INTEGER DEFAULT 0,
+                    lunch_price TEXT,
+                    total_price NUMERIC DEFAULT 0.0,
+                    transaction_image TEXT,
+                    transaction_confirmed BOOLEAN DEFAULT FALSE,
+                    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    paid BOOLEAN DEFAULT FALSE,
+                    ticket_message_id BIGINT
+                )
+            ''')
+            # Modify users table to include ticket_message_id
+            cursor.execute('''
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS ticket_message_id BIGINT
+            ''')
+            self.conn.commit()
+            logging.info("Database tables are set up successfully.")
+        except Exception as e:
+            logging.error(f"Error creating tables: {e}")
+            self.conn.rollback()
+            raise
 
     def add_or_get_user(self, user_id):
         """Add a new user or get existing user"""

@@ -3,11 +3,11 @@ services:
     image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest # Updated to pull from GHCR
     env_file:
       - .env # Added to load environment variables from .env
-    environment:
-      - DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@postgres:5432/lunch?sslmode=disable
-      # Removed individual DISCORD_TOKEN and LUNCH_PRICE as they are now loaded from .env
+
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy # Wait for postgres to be healthy
+    restart: unless-stopped # Prevent infinite restart loops
     networks:
       - app-network
 
@@ -23,6 +23,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 networks:
   app-network:

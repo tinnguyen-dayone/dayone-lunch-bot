@@ -50,6 +50,7 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DB_URL: ${{ secrets.DB_URL }} # Ensure DB_URL is included
           LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
         run: |
           ssh -tt ubuntu@$SSH_HOST << EOF
@@ -82,7 +83,7 @@ jobs:
             # Ensure Docker Compose is installed correctly
             if ! command -v docker-compose &> /dev/null
             then
-              sudo curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
               # Verify installation
               docker-compose --version
@@ -114,6 +115,7 @@ jobs:
             # Start the service using Docker Compose
             docker-compose up -d --pull always
           EOF
+        continue-on-error: false # Ensure the workflow fails on deployment errors
 
       - name: Verify Deployment
         env:

@@ -26,6 +26,11 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 DB_URL = os.getenv('DB_URL')
 LUNCH_PRICE = os.getenv('LUNCH_PRICE', '55.000 VND')
 
+# Log the loaded environment variables for debugging
+logging.info(f"Loaded DISCORD_TOKEN: {'***' if TOKEN else 'Not Set'}")
+logging.info(f"Loaded DB_URL: {DB_URL}")
+logging.info(f"Loaded LUNCH_PRICE: {LUNCH_PRICE}")
+
 # Bot configuration
 intents = discord.Intents.default()
 intents.message_content = True
@@ -52,13 +57,22 @@ if not getattr(bot, 'events_setup', False):
     setup_events(bot)
     bot.events_setup = True
 
+@bot.event
+async def on_shutdown():
+    logging.info("Shutting down the bot...")
+    db_manager.close()
+
 if __name__ == "__main__":
-    try:
-        logging.info("Starting bot...")
-        bot.run(TOKEN)
-    except discord.LoginFailure:
-        logging.error("Invalid token provided")
-    except Exception as e:
-        logging.error(f"Error: {e}")
-    finally:
-        logging.info("Shutting down...")
+    async def main():
+        try:
+            logging.info("Starting bot...")
+            await bot.start(TOKEN)
+        except discord.LoginFailure:
+            logging.error("Invalid token provided")
+        except Exception as e:
+            logging.error(f"Error: {e}")
+        finally:
+            await on_shutdown()
+            logging.info("Bot has been shut down.")
+    
+    asyncio.run(main())

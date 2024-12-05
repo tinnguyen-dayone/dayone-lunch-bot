@@ -11,8 +11,15 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Copy project files
+# Copy project files without .env
 COPY . .
 
-# Run the bot
-CMD ["python", "main.py"]
+# Install netcat for the wait script
+RUN apt-get update && apt-get install -y netcat && rm -rf /var/lib/apt/lists/*
+
+# Add wait-for-postgres script
+COPY wait-for-postgres.sh /usr/local/bin/wait-for-postgres.sh
+RUN chmod +x /usr/local/bin/wait-for-postgres.sh
+
+# Run the bot after waiting for PostgreSQL
+CMD ["wait-for-postgres.sh", "postgres", "5432", "--", "python", "main.py"]
