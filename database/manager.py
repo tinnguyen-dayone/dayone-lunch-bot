@@ -10,6 +10,7 @@ class DatabaseManager:
     def __init__(self, db_url, retries=10, delay=5):  # Increased retries to 10
         """Initialize database connection with retries"""
         self.db_url = db_url
+        self.conn = None  # Initialize conn as None
         for attempt in range(1, retries + 1):
             try:
                 # Add connection options to force TCP/IP
@@ -19,7 +20,8 @@ class DatabaseManager:
                     'keepalives': 1,
                     'keepalives_idle': 30,
                     'keepalives_interval': 10,
-                    'keepalives_count': 5
+                    'keepalives_count': 5,
+                    'host': 'localhost'  # Force TCP/IP connection
                 }
                 self.conn = psycopg2.connect(self.db_url, **conn_params)
                 logging.info("Database connection established successfully.")
