@@ -7,13 +7,13 @@ import time
 db_logger = logging.getLogger('bot.database')
 
 class DatabaseManager:
-    def __init__(self, db_url, retries=10, delay=5):  # Increased retries to 10
+    def __init__(self, db_url, retries=10, delay=5):
         """Initialize database connection with retries"""
         self.db_url = db_url
-        self.conn = None  # Initialize conn as None
+        self.conn = None
         for attempt in range(1, retries + 1):
             try:
-                # Add connection options to force TCP/IP
+                # Add connection options with proper authentication
                 conn_params = {
                     'connect_timeout': 10,
                     'application_name': 'dayone-lunch-bot',
@@ -21,12 +21,24 @@ class DatabaseManager:
                     'keepalives_idle': 30,
                     'keepalives_interval': 10,
                     'keepalives_count': 5,
-                    'host': 'localhost'  # Force TCP/IP connection
+                    'sslmode': 'disable'  # Explicitly disable SSL
                 }
-                self.conn = psycopg2.connect(self.db_url, **conn_params)
+                
+                # Parse connection string to get components
+                from urllib.parse import urlparse
+                url = urlparse(self.db_url)
+                conn_params.update({
+                    'dbname': url.path[1:],
+                    'user': url.username,
+                    'password': url.password,
+                    'host': url.hostname,
+                    'port': url.port or 5432
+                })
+                
+                self.conn = psycopg2.connect(**conn_params)
                 logging.info("Database connection established successfully.")
                 break
-            except psycopg2.OperationalError as e:
+            except Exception as e:
                 logging.error(f"Attempt {attempt}: Failed to connect to the database: {e}")
                 if attempt < retries:
                     logging.info(f"Retrying in {delay} seconds...")
