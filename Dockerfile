@@ -22,4 +22,5 @@ COPY wait-for-postgres.sh /usr/local/bin/wait-for-postgres.sh
 RUN chmod +x /usr/local/bin/wait-for-postgres.sh
 
 # Run the bot after waiting for PostgreSQL
-CMD ["wait-for-postgres.sh", "postgres", "5432", "--", "python", "main.py"]
+ENTRYPOINT ["wait-for-postgres.sh", "postgres", "5432", "--"]
+CMD ["python", "main.py"]

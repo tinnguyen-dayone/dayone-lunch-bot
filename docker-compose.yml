@@ -3,13 +3,17 @@ services:
     image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest # Updated to pull from GHCR
     env_file:
       - .env # Added to load environment variables from .env
-
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DB_URL=${DB_URL}
+      - LUNCH_PRICE=${LUNCH_PRICE}
     depends_on:
       postgres:
         condition: service_healthy # Wait for postgres to be healthy
-    restart: unless-stopped # Prevent infinite restart loops
+    restart: on-failure # Prevent infinite restart loops
     networks:
       - app-network
+    tty: true
 
   postgres:
     image: postgres:15 # Ensure version matches your data directory

@@ -114,6 +114,10 @@ jobs:
 
             # Start the service using Docker Compose
             docker-compose up -d --pull always
+
+            # Wait for a few seconds to allow services to initialize
+            sleep 10
+
           EOF
         continue-on-error: false # Ensure the workflow fails on deployment errors
 

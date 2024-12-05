@@ -58,6 +58,14 @@ if not getattr(bot, 'events_setup', False):
     bot.events_setup = True
 
 @bot.event
+async def on_disconnect():
+    logging.info("Bot has disconnected.")
+
+@bot.event
+async def on_resume():
+    logging.info("Bot has resumed connection.")
+
+@bot.event
 async def on_shutdown():
     logging.info("Shutting down the bot...")
     db_manager.close()
