@@ -53,17 +53,17 @@ jobs:
           DB_URL: ${{ secrets.DB_URL }}
           LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
         run: |
-          ssh -tt ubuntu@$SSH_HOST << EOF
-            set -e  # Exit immediately if a command exits with a non-zero status
-
+          # Create deployment script
+          cat << 'EOF' > deploy.sh
+            set -e
+            
             # Install Git if not available
-            if ! command -v git &> /dev/null
-            then
+            if ! command -v git &> /dev/null; then
               sudo apt-get update
               sudo apt-get install -y git
             fi
 
-            # Ensure the directory is a git repository
+            # Setup repository
             if [ ! -d ~/discord-bot/.git ]; then
               rm -rf ~/discord-bot
               git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
@@ -72,22 +72,17 @@ jobs:
               git pull
             fi
 
-            if ! command -v docker &> /dev/null
-            then
+            # Install Docker if not available
+            if ! command -v docker &> /dev/null; then
               curl -fsSL https://get.docker.com -o get-docker.sh
               sh get-docker.sh
               sudo usermod -aG docker ubuntu
               newgrp docker
             fi
 
-            # Start the Docker container without using Docker Compose
-            # Remove any existing container
+            # Deploy container
             docker rm -f dayone-lunch-bot || true
-
-            # Pull the latest Docker image
             docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
-
-            # Run the new container with host network
             docker run -d \
               --name dayone-lunch-bot \
               --network host \
@@ -97,13 +92,18 @@ jobs:
               --restart on-failure \
               ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
-            exit 0
+            # Verify container is running
+            docker ps | grep dayone-lunch-bot || exit 1
           EOF
-        continue-on-error: false # Ensure the workflow fails on deployment errors
+
+          # Copy and execute deployment script
+          chmod +x deploy.sh
+          scp deploy.sh ubuntu@$SSH_HOST:~/deploy.sh
+          ssh ubuntu@$SSH_HOST "bash ~/deploy.sh && rm ~/deploy.sh"
 
       - name: Verify Deployment
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          sleep 20
-          ssh ubuntu@$SSH_HOST 'docker ps | grep dayone-lunch-bot'
+          sleep 10
+          ssh ubuntu@$SSH_HOST 'docker ps | grep -q dayone-lunch-bot'
