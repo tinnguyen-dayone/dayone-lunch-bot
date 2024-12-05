@@ -57,13 +57,14 @@ if not getattr(bot, 'events_setup', False):
     setup_events(bot)
     bot.events_setup = True
 
-@bot.event
-async def on_disconnect():
-    logging.info("Bot has disconnected.")
+# Remove or comment out the following event handlers if they're only related to PostgreSQL
+# @bot.event
+# async def on_disconnect():
+#     logging.info("Bot has disconnected.")
 
-@bot.event
-async def on_resume():
-    logging.info("Bot has resumed connection.")
+# @bot.event
+# async def on_resume():
+#     logging.info("Bot has resumed connection.")
 
 @bot.event
 async def on_shutdown():

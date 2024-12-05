@@ -50,7 +50,7 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          DB_URL: ${{ secrets.DB_URL }} # Ensure DB_URL is included
+          DB_URL: ${{ secrets.DB_URL }}
           LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
         run: |
           ssh -tt ubuntu@$SSH_HOST << EOF
@@ -80,44 +80,21 @@ jobs:
               newgrp docker
             fi
 
-            # Ensure Docker Compose is installed correctly
-            if ! command -v docker-compose &> /dev/null
-            then
-              sudo curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-              # Verify installation
-              docker-compose --version
-            fi
+            # Start the Docker container without using Docker Compose
+            # Remove any existing container
+            docker rm -f dayone-lunch-bot || true
 
-            # Create .env file with environment variables
-            echo "DISCORD_TOKEN=${DISCORD_TOKEN}" > ~/discord-bot/.env
-            echo "DB_URL=${DB_URL}" >> ~/discord-bot/.env
-            echo "LUNCH_PRICE=${LUNCH_PRICE}" >> ~/discord-bot/.env
+            # Run the new container
+            docker run -d \
+              --name dayone-lunch-bot \
+              --env DISCORD_TOKEN=${DISCORD_TOKEN} \
+              --env DB_URL=${DB_URL} \
+              --env LUNCH_PRICE=${LUNCH_PRICE} \
+              --restart on-failure \
+              ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
-            # Log in to GitHub Container Registry with non-interactive login
-            echo "${GHCR_PAT}" | docker login ghcr.io -u tinnguyen-dayone --password-stdin
-
-            # Pull the latest Docker image from GHCR
-            docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
-
-            # Navigate to the project directory
-            cd ~/discord-bot || { mkdir ~/discord-bot && cd ~/discord-bot; }
-
-            # Ensure docker-compose.yml exists
-            if [ ! -f docker-compose.yml ]; then
-              echo "docker-compose.yml not found in ~/discord-bot directory."
-              exit 1
-            fi
-
-            # Stop existing containers if any
-            docker-compose down || true
-
-            # Start the service using Docker Compose
-            docker-compose up -d --pull always
-
-            # Wait for a few seconds to allow services to initialize
+            # Wait for a few seconds to allow the container to initialize
             sleep 10
-
           EOF
         continue-on-error: false # Ensure the workflow fails on deployment errors
 
@@ -126,4 +103,4 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
           sleep 20
-          ssh ubuntu@$SSH_HOST 'docker-compose ps'
+          ssh ubuntu@$SSH_HOST 'docker ps | grep dayone-lunch-bot'
