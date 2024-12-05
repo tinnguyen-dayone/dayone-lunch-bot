@@ -15,4 +15,4 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Set CMD to run the application directly with unbuffered output
-CMD ["python", "-u", "main.py"]
+CMD ["python3", "-u", "main.py"]
