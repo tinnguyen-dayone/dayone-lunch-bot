@@ -90,7 +90,7 @@ jobs:
             # Run the new container with host network
             docker run -d \
               --name dayone-lunch-bot \
-              --network host \  # Added network host
+              --network host \
               --env DISCORD_TOKEN=${DISCORD_TOKEN} \
               --env DB_URL=${DB_URL} \
               --env LUNCH_PRICE=${LUNCH_PRICE} \
