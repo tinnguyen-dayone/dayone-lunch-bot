@@ -1,7 +1,19 @@
-import os
-import sys
-import discord
 import logging
+import sys
+
+# Setup logging
+logging.basicConfig(
+    level=logging.DEBUG,  # Ensure DEBUG level for testing
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+# Test log statements
+logging.debug("Debugging: Logging is configured correctly.")
+logging.info("Info: Logging is active.")
+
+import os
+import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import asyncio
@@ -13,12 +25,9 @@ from database.manager import DatabaseManager
 from bot.commands import setup_commands
 from bot.events import setup_events
 
-# Setup logging
-logging.basicConfig(
-    level=logging.DEBUG,  # Changed from INFO to DEBUG
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
+# Adjust discord library logging
+discord_logger = logging.getLogger('discord')
+discord_logger.setLevel(logging.DEBUG)
 
 # Load environment variables
 load_dotenv()
