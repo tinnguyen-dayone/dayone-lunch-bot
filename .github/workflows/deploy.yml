@@ -49,6 +49,9 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DB_URL: ${{ secrets.DB_URL }}
+          LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
         run: |
           ssh -tt ubuntu@$SSH_HOST << EOF
             set -e  # Exit immediately if a command exits with a non-zero status
@@ -85,6 +88,11 @@ jobs:
               # Verify installation
               docker-compose --version
             fi
+
+            # Create .env file with environment variables
+            echo "DISCORD_TOKEN=${DISCORD_TOKEN}" > ~/discord-bot/.env
+            echo "DB_URL=${DB_URL}" >> ~/discord-bot/.env
+            echo "LUNCH_PRICE=${LUNCH_PRICE}" >> ~/discord-bot/.env
 
             # Log in to GitHub Container Registry with non-interactive login
             echo "${GHCR_PAT}" | docker login ghcr.io -u tinnguyen-dayone --password-stdin
