@@ -84,6 +84,9 @@ jobs:
             # Remove any existing container
             docker rm -f dayone-lunch-bot || true
 
+            # Pull the latest Docker image
+            docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
+
             # Run the new container
             docker run -d \
               --name dayone-lunch-bot \
@@ -93,7 +96,7 @@ jobs:
               --restart on-failure \
               ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
-            exit
+            exit 0
           EOF
         continue-on-error: false # Ensure the workflow fails on deployment errors
 
