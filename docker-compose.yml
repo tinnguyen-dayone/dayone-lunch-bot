@@ -4,7 +4,7 @@ services:
     env_file:
       - .env # Added to load environment variables from .env
     environment:
-      - DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@0.0.0.0:5432/lunch?sslmode=disable
+      - DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@postgres:5432/lunch?sslmode=disable
       # Removed individual DISCORD_TOKEN and LUNCH_PRICE as they are now loaded from .env
     depends_on:
       - postgres
