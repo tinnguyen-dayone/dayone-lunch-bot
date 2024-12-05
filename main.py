@@ -1,18 +1,28 @@
 import logging
 import sys
+import os
+
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,  # Ensure DEBUG level for testing
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('logs/bot.log')
+    ]
 )
+
+# Create logger for the bot
+bot_logger = logging.getLogger('bot')
+bot_logger.setLevel(logging.DEBUG)
 
 # Test log statements
 logging.debug("Debugging: Logging is configured correctly.")
 logging.info("Info: Logging is active.")
 
-import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -27,7 +37,7 @@ from bot.events import setup_events
 
 # Adjust discord library logging
 discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.INFO)
+discord_logger.setLevel(logging.DEBUG)  # Set Discord logger to DEBUG
 
 # Load environment variables
 load_dotenv()
@@ -66,14 +76,6 @@ if not getattr(bot, 'events_setup', False):
     setup_events(bot)
     bot.events_setup = True
 
-# Remove or comment out the following event handlers if they're only related to PostgreSQL
-# @bot.event
-# async def on_disconnect():
-#     logging.info("Bot has disconnected.")
-
-# @bot.event
-# async def on_resume():
-#     logging.info("Bot has resumed connection.")
 
 @bot.event
 async def on_shutdown():

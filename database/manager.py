@@ -3,6 +3,9 @@ import psycopg2
 from psycopg2.extras import DictCursor
 import time
 
+# Create logger for database operations
+db_logger = logging.getLogger('bot.database')
+
 class DatabaseManager:
     def __init__(self, db_url, retries=10, delay=5):  # Increased retries to 10
         """Initialize database connection with retries"""
@@ -45,11 +48,6 @@ class DatabaseManager:
                     paid BOOLEAN DEFAULT FALSE,
                     ticket_message_id BIGINT
                 )
-            ''')
-            # Modify users table to include ticket_message_id
-            cursor.execute('''
-                ALTER TABLE users
-                ADD COLUMN IF NOT EXISTS ticket_message_id BIGINT
             ''')
             self.conn.commit()
             logging.info("Database tables are set up successfully.")
@@ -120,9 +118,15 @@ class DatabaseManager:
 
     def increment_commentation_with_price(self, user_id, price):
         """Add a new transaction with the given price"""
-        self.add_or_get_user(user_id)
-        transaction_id = self.create_transaction(user_id, price)
-        return transaction_id
+        try:
+            db_logger.debug(f'Adding new transaction for user {user_id} with price {price}')
+            self.add_or_get_user(user_id)
+            transaction_id = self.create_transaction(user_id, price)
+            db_logger.info(f'Successfully created transaction {transaction_id} for user {user_id}')
+            return transaction_id
+        except Exception as e:
+            db_logger.error(f'Failed to create transaction for user {user_id}: {str(e)}\n{traceback.format_exc()}')
+            raise
 
     def set_ticket_message_id(self, transaction_id, message_id):
         """Set the ticket message ID for a transaction"""
@@ -220,27 +224,6 @@ class DatabaseManager:
             ''', (user_id,))
             return cursor.fetchone() is not None
 
-    def set_user_ticket_message_id(self, user_id, message_id):
-        """Set the ticket message ID for a user"""
-        with self.conn.cursor() as cursor:
-            cursor.execute('''
-                UPDATE users
-                SET ticket_message_id = %s
-                WHERE user_id = %s
-            ''', (message_id, user_id))
-        self.conn.commit()
-
-    def get_user_ticket_message_id(self, user_id):
-        """Retrieve the ticket message ID for a user"""
-        with self.conn.cursor() as cursor:
-            cursor.execute('''
-                SELECT ticket_message_id
-                FROM users 
-                WHERE user_id = %s
-            ''', (user_id,))
-            result = cursor.fetchone()
-            return result[0] if result else None
-
     def get_unpaid_total(self, user_id):
         """Calculate the total unpaid transactions for a user"""
         with self.conn.cursor() as cursor:
@@ -272,13 +255,13 @@ class DatabaseManager:
         """Destructor to ensure database connection is closed"""
         self.close()
 
-    def set_user_ticket_message_id(self, transaction_id, message_id):
-        """Set the ticket message ID for a transaction"""
-        logging.debug(f"Setting ticket_message_id: {message_id} for transaction_id: {transaction_id}")
+    def get_user_ticket_message_ids(self, user_id):
+        """Retrieve all ticket message IDs for a user's unpaid transactions"""
         with self.conn.cursor() as cursor:
             cursor.execute('''
-                UPDATE transactions
-                SET ticket_message_id = %s
-                WHERE transaction_id = %s
-            ''', (message_id, transaction_id))
-        self.conn.commit()
+                SELECT ticket_message_id
+                FROM transactions
+                WHERE user_id = %s AND paid = FALSE AND ticket_message_id IS NOT NULL
+            ''', (user_id,))
+            results = cursor.fetchall()
+            return [row[0] for row in results]
