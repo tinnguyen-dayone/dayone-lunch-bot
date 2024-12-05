@@ -35,7 +35,11 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Initialize database
-db_manager = DatabaseManager(DB_URL)
+try:
+    db_manager = DatabaseManager(DB_URL)
+except Exception as e:
+    logging.error(f"Database connection error: {e}")
+    sys.exit(1)
 
 # Pass the db_manager instance to other modules if necessary
 # For example, you might need to modify how DatabaseManager is accessed in other files

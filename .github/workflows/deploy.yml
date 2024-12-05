@@ -5,43 +5,35 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
         with:
-          python-version: "3.12"
-          cache: "pip"
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/dayone-lunch-bot:latest
 
-      - name: Create service file
-        run: |
-          cat > discord-bot.service << EOF
-          [Unit]
-          Description=Discord Bot Service
-          After=network.target
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
-          [Service]
-          Type=simple
-          User=ubuntu
-          WorkingDirectory=/home/ubuntu/discord-bot
-          Environment="DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}"
-          Environment="DB_URL=${{ secrets.DB_URL }}"
-          ExecStart=/home/ubuntu/discord-bot/venv/bin/python main.py
-          Restart=always
-          RestartSec=1
-
-          [Install]
-          WantedBy=multi-user.target
-          EOF
+    steps:
+      - uses: actions/checkout@v3
 
       - name: Install SSH key
         uses: webfactory/ssh-agent@v0.9.0
@@ -56,31 +48,43 @@ jobs:
       - name: Deploy to EC2
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
-          # Stop existing service
           ssh ubuntu@$SSH_HOST '
-            sudo systemctl stop discord-bot || true
-            mkdir -p ~/discord-bot'
+            if ! command -v docker &> /dev/null
+            then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sh get-docker.sh
+              sudo usermod -aG docker ubuntu
+              newgrp docker
+            fi
 
-          # Copy project files
-          scp -r ./* ubuntu@$SSH_HOST:~/discord-bot/
-          scp discord-bot.service ubuntu@$SSH_HOST:~/discord-bot/
+            # Ensure Docker Compose is installed
+            if ! command -v docker-compose &> /dev/null
+            then
+              sudo curl -L "https://github.com/docker/compose/releases/download/2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
 
-          # Setup and start service
-          ssh ubuntu@$SSH_HOST '
-            cd ~/discord-bot &&
-            python3 -m venv venv &&
-            source venv/bin/activate &&
-            pip install --upgrade pip &&
-            pip install -r requirements.txt &&
-            sudo mv discord-bot.service /etc/systemd/system/ &&
-            sudo systemctl daemon-reload &&
-            sudo systemctl enable discord-bot &&
-            sudo systemctl start discord-bot'
+            # Log in to GitHub Container Registry
+            echo ${GHCR_PAT} | docker login ghcr.io -u tinnguyen-dayone --password-stdin
+
+            # Pull the latest Docker image from GHCR
+            docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
+
+            # Stop existing containers if any
+            cd ~/discord-bot || mkdir ~/discord-bot && cd ~/discord-bot
+            docker-compose down || true
+
+            # Update docker-compose.yml to use the pulled image
+            sed -i 's|image: .*|image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest|' docker-compose.yml
+
+            # Start the service using Docker Compose
+            docker-compose up -d --pull always
+          '
 
       - name: Verify Deployment
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          sleep 10
-          ssh ubuntu@$SSH_HOST 'systemctl is-active discord-bot'
+          sleep 20          ssh ubuntu@$SSH_HOST 'docker-compose ps'

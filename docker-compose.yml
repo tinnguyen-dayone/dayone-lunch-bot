@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  app:
+    image: ghcr.io/your_github_username/dayone-lunch-bot:latest # Updated to pull from GHCR
+    environment:
+      - DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@postgres:5432/lunch?sslmode=disable
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - LUNCH_PRICE=${LUNCH_PRICE}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:15 # Ensure version matches your data directory
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: UbsYkfANm36ezN1PQkcp
+      POSTGRES_DB: lunch
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

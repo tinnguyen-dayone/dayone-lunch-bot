@@ -1,12 +1,25 @@
 import logging
 import psycopg2
 from psycopg2.extras import DictCursor
+import time
 
 class DatabaseManager:
-    def __init__(self, db_url):
-        """Initialize database connection"""
+    def __init__(self, db_url, retries=5, delay=5):
+        """Initialize database connection with retries"""
         self.db_url = db_url
-        self.conn = psycopg2.connect(self.db_url)
+        for attempt in range(1, retries + 1):
+            try:
+                self.conn = psycopg2.connect(self.db_url)
+                logging.info("Database connection established.")
+                break
+            except psycopg2.OperationalError as e:
+                logging.error(f"Attempt {attempt}: Failed to connect to the database: {e}")
+                if attempt < retries:
+                    logging.info(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    logging.error("All retry attempts failed.")
+                    raise
         self.create_tables()
 
     def create_tables(self):
