@@ -60,8 +60,9 @@ jobs:
               sudo apt-get install -y git
             fi
 
-            # Use HTTPS for cloning since the repository is public
-            if [ ! -d ~/discord-bot ]; then
+            # Ensure the directory is a git repository
+            if [ ! -d ~/discord-bot/.git ]; then
+              rm -rf ~/discord-bot
               git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
             else
               cd ~/discord-bot
