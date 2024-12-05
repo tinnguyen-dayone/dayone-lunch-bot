@@ -50,7 +50,7 @@ jobs:
           SSH_HOST: ${{ secrets.EC2_HOST }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
-          ssh ubuntu@$SSH_HOST '
+          ssh ubuntu@$SSH_HOST << 'EOF'
             if ! command -v docker &> /dev/null
             then
               curl -fsSL https://get.docker.com -o get-docker.sh
@@ -67,7 +67,7 @@ jobs:
             fi
 
             # Log in to GitHub Container Registry
-            echo ${GHCR_PAT} | docker login ghcr.io -u tinnguyen-dayone --password-stdin
+            echo "${GHCR_PAT}" | docker login ghcr.io -u tinnguyen-dayone --password-stdin
 
             # Pull the latest Docker image from GHCR
             docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
@@ -81,10 +81,11 @@ jobs:
 
             # Start the service using Docker Compose
             docker-compose up -d --pull always
-          '
+          EOF
 
       - name: Verify Deployment
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          sleep 20          ssh ubuntu@$SSH_HOST 'docker-compose ps'
+          sleep 20
+          ssh ubuntu@$SSH_HOST 'docker-compose ps'
