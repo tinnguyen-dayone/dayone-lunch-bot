@@ -60,7 +60,7 @@ jobs:
               sudo apt-get install -y git
             fi
 
-            # Clone repository if ~/discord-bot doesn't exist
+            # Use HTTPS for cloning since the repository is public
             if [ ! -d ~/discord-bot ]; then
               git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
             else
@@ -102,21 +102,6 @@ jobs:
 
             # Stop existing containers if any
             docker-compose down || true
-
-
-            # Update docker-compose.yml to use the pulled image
-            sed -i 's|image: .*|image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest|' docker-compose.yml
-
-            # Start the service using Docker Compose
-            docker-compose up -d --pull always
-          EOF
-
-      - name: Verify Deployment
-        env:
-          SSH_HOST: ${{ secrets.EC2_HOST }}
-        run: |
-          sleep 20
-          ssh ubuntu@$SSH_HOST 'docker-compose ps'
 
             # Update docker-compose.yml to use the pulled image
             sed -i 's|image: .*|image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest|' docker-compose.yml

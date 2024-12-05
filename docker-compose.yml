@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   app:
-    image: ghcr.io/your_github_username/dayone-lunch-bot:latest # Updated to pull from GHCR
+    image: ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest # Updated to pull from GHCR
     environment:
       - DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@postgres:5432/lunch?sslmode=disable
       - DISCORD_TOKEN=${DISCORD_TOKEN}
