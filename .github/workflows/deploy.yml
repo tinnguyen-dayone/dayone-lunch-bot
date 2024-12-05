@@ -93,6 +93,7 @@ jobs:
               --restart on-failure \
               ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
+            exit
           EOF
         continue-on-error: false # Ensure the workflow fails on deployment errors
 
