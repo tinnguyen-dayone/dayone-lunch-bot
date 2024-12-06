@@ -54,75 +54,77 @@ jobs:
           LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
         run: |
           # Create deployment script
-          cat << 'EOF' > deploy.sh
-            set -e
+          cat > deploy.sh << 'EOL'
+          #!/bin/bash
+          set -e
             
-            # Install Git if not available
-            if ! command -v git &> /dev/null; then
-              sudo apt-get update
-              sudo apt-get install -y git
-            fi
+          # Install Git if not available
+          if ! command -v git &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y git
+          fi
 
-            # Setup repository
-            if [ ! -d ~/discord-bot/.git ]; then
-              rm -rf ~/discord-bot
-              git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
-            else
-              cd ~/discord-bot
-              git pull
-            fi
+          # Setup repository
+          if [ ! -d ~/discord-bot/.git ]; then
+            rm -rf ~/discord-bot
+            git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
+          else
+            cd ~/discord-bot
+            git pull
+          fi
 
-            # Install Docker if not available
-            if ! command -v docker &> /dev/null; then
-              curl -fsSL https://get.docker.com -o get-docker.sh
-              sh get-docker.sh
-              sudo usermod -aG docker ubuntu
-              newgrp docker
-            fi
+          # Install Docker if not available
+          if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            sudo usermod -aG docker ubuntu
+            newgrp docker
+          fi
 
-            # Create Docker network if it doesn't exist
-            docker network create lunch-network || true
+          # Create Docker network if it doesn't exist
+          docker network create lunch-network || true
 
-            # Stop and remove existing containers
-            docker rm -f dayone-lunch-bot || true
+          # Stop and remove existing containers
+          docker rm -f dayone-lunch-bot || true
 
-            # Run PostgreSQL if not already running
-            if ! docker ps | grep -q dayone-lunch-postgres; then
-              docker run -d \
-                --name dayone-lunch-postgres \
-                --network lunch-network \
-                -e POSTGRESQL_PASSWORD=UbsYkfANm36ezN1PQkcp \
-                -e POSTGRESQL_DATABASE=lunch \
-                -e POSTGRESQL_USERNAME=postgres \
-                -p 5432:5432 \
-                bitnami/postgresql:latest
-            else
-              # Connect existing postgres to network if needed
-              docker network connect lunch-network dayone-lunch-postgres || true
-            fi
-
-            # Create .env file
-            cat << EOF > .env
-            DISCORD_TOKEN=${DISCORD_TOKEN}
-            DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@dayone-lunch-postgres:5432/lunch
-            LUNCH_PRICE=${LUNCH_PRICE}
-            EOF
-
-            # Deploy bot container
+          # Run PostgreSQL if not already running
+          if ! docker ps | grep -q dayone-lunch-postgres; then
             docker run -d \
-              --name dayone-lunch-bot \
+              --name dayone-lunch-postgres \
               --network lunch-network \
-              -v $(pwd)/.env:/app/.env \
-              --restart on-failure \
-              ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
+              -e POSTGRESQL_PASSWORD=UbsYkfANm36ezN1PQkcp \
+              -e POSTGRESQL_DATABASE=lunch \
+              -e POSTGRESQL_USERNAME=postgres \
+              -p 5432:5432 \
+              bitnami/postgresql:latest
+          else
+            # Connect existing postgres to network if needed
+            docker network connect lunch-network dayone-lunch-postgres || true
+          fi
 
-            # Verify container is running
-            docker ps | grep dayone-lunch-bot || exit 1
-          EOF
+          # Create .env file
+          cat > .env << EOT
+          DISCORD_TOKEN=${DISCORD_TOKEN}
+          DB_URL=${DB_URL}
+          LUNCH_PRICE=${LUNCH_PRICE}
+          EOT
 
-          # Copy and execute deployment script
-          chmod +x deploy.sh
-          scp deploy.sh ubuntu@$SSH_HOST:~/deploy.sh
+          # Deploy bot container
+          docker run -d \
+            --name dayone-lunch-bot \
+            --network lunch-network \
+            -v \$(pwd)/.env:/app/.env \
+            --restart on-failure \
+            ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
+
+          # Verify container is running
+          docker ps | grep dayone-lunch-bot || exit 1
+          EOL
+
+          # Replace environment variables in script
+          envsubst < deploy.sh > deploy_env.sh
+          chmod +x deploy_env.sh
+          scp deploy_env.sh ubuntu@$SSH_HOST:~/deploy.sh
           ssh ubuntu@$SSH_HOST "bash ~/deploy.sh && rm ~/deploy.sh"
 
       - name: Verify Deployment
