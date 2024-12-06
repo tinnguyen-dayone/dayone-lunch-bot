@@ -7,7 +7,7 @@ os.makedirs('logs', exist_ok=True)
 
 # Setup logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
@@ -17,11 +17,9 @@ logging.basicConfig(
 
 # Create logger for the bot
 bot_logger = logging.getLogger('bot')
-bot_logger.setLevel(logging.DEBUG)
+bot_logger.setLevel(logging.INFO)
 
 # Test log statements
-logging.debug("Debugging: Logging is configured correctly.")
-logging.info("Info: Logging is active.")
 
 import discord
 from discord.ext import commands
@@ -35,9 +33,6 @@ from database.manager import DatabaseManager
 from bot.commands import setup_commands
 from bot.events import setup_events
 
-# Adjust discord library logging
-discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.DEBUG)  # Set Discord logger to DEBUG
 
 # Load environment variables
 load_dotenv()
