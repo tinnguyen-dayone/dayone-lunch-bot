@@ -95,7 +95,8 @@ jobs:
               -e POSTGRESQL_PASSWORD=UbsYkfANm36ezN1PQkcp \
               -e POSTGRESQL_DATABASE=lunch \
               -e POSTGRESQL_USERNAME=postgres \
-              -e POSTGRESQL_ENABLE_SSL=false \
+              -e POSTGRESQL_ENABLE_TLS=false \
+              -e POSTGRESQL_SKIP_SSLMODE=true \
               -p 5432:5432 \
               bitnami/postgresql:latest
           else
