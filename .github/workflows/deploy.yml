@@ -80,15 +80,39 @@ jobs:
               newgrp docker
             fi
 
-            # Deploy container
+            # Create Docker network if it doesn't exist
+            docker network create lunch-network || true
+
+            # Stop and remove existing containers
             docker rm -f dayone-lunch-bot || true
-            docker pull ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
+
+            # Run PostgreSQL if not already running
+            if ! docker ps | grep -q dayone-lunch-postgres; then
+              docker run -d \
+                --name dayone-lunch-postgres \
+                --network lunch-network \
+                -e POSTGRESQL_PASSWORD=UbsYkfANm36ezN1PQkcp \
+                -e POSTGRESQL_DATABASE=lunch \
+                -e POSTGRESQL_USERNAME=postgres \
+                -p 5432:5432 \
+                bitnami/postgresql:latest
+            else
+              # Connect existing postgres to network if needed
+              docker network connect lunch-network dayone-lunch-postgres || true
+            fi
+
+            # Create .env file
+            cat << EOF > .env
+            DISCORD_TOKEN=${DISCORD_TOKEN}
+            DB_URL=postgresql://postgres:UbsYkfANm36ezN1PQkcp@dayone-lunch-postgres:5432/lunch
+            LUNCH_PRICE=${LUNCH_PRICE}
+            EOF
+
+            # Deploy bot container
             docker run -d \
               --name dayone-lunch-bot \
-              --network host \
-              --env DISCORD_TOKEN=${DISCORD_TOKEN} \
-              --env DB_URL=${DB_URL} \
-              --env LUNCH_PRICE=${LUNCH_PRICE} \
+              --network lunch-network \
+              -v $(pwd)/.env:/app/.env \
               --restart on-failure \
               ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
 
