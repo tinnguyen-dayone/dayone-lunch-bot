@@ -5,6 +5,8 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_URL = os.getenv('DB_URL')
+SENTRY_DSN = os.getenv('SENTRY_DSN')
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 
 # Always set SSL mode to disable for local Docker network
 if DB_URL:

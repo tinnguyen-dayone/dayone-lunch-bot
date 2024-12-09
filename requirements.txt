@@ -29,6 +29,7 @@ pytz==2024.2
 requests==2.32.3
 ResourceBundle==2.1.0
 s3transfer==0.10.4
+sentry-sdk==2.19.2
 six==1.17.0
 toml==0.10.2
 types-aws-xray-sdk==2.14.0.20240606

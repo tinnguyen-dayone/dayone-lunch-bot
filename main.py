@@ -1,11 +1,13 @@
 import logging
 import sys
 import os
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 # Create logs directory if it doesn't exist
 os.makedirs('logs', exist_ok=True)
 
-# Setup logging
+# Setup logging before Sentry initialization
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s',
@@ -14,6 +16,32 @@ logging.basicConfig(
         logging.FileHandler('logs/bot.log')
     ]
 )
+
+# Configure Sentry SDK with advanced options
+sentry_logging = LoggingIntegration(
+    level=logging.INFO,        # Capture info and above as breadcrumbs
+    event_level=logging.ERROR  # Send errors as events
+)
+
+
+sentry_sdk.init(
+    dsn=os.getenv('SENTRY_DSN'),
+    traces_sample_rate=1.0,
+    profiles_sample_rate=1.0,
+    environment=os.getenv('ENVIRONMENT', 'development'),
+    integrations=[
+        sentry_logging
+    ],
+    # Configure additional context
+    before_send=lambda event, hint: {
+        **event,
+        "tags": {
+            **(event.get("tags", {})),
+            "bot_version": "1.0.0",
+        }
+    }
+)
+
 
 # Create logger for the bot
 bot_logger = logging.getLogger('bot')
@@ -53,6 +81,12 @@ intents.members = True
 # Bot setup
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Enhance error tracking
+@bot.event
+async def on_error(event, *args, **kwargs):
+    sentry_sdk.capture_exception()
+    logging.error(f"Error in {event}: {sys.exc_info()}")
+
 # Initialize database
 try:
     db_manager = DatabaseManager(DB_URL)
@@ -84,8 +118,10 @@ if __name__ == "__main__":
             await bot.start(TOKEN)
         except discord.LoginFailure:
             logging.error("Invalid token provided")
+            sentry_sdk.capture_message("Invalid Discord token", level="error")
         except Exception as e:
             logging.error(f"Error: {e}")
+            sentry_sdk.capture_exception()
         finally:
             await on_shutdown()
             logging.info("Bot has been shut down.")

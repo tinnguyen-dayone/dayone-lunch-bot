@@ -2,6 +2,7 @@ import logging
 from discord.ext import commands
 import discord
 import traceback
+import sentry_sdk
 
 # Create logger for events
 event_logger = logging.getLogger('bot.events')
@@ -22,18 +23,40 @@ def setup_events(bot):
 
         @bot.event
         async def on_command_error(ctx, error):
-            # Log the error but don't send message for CommandInvokeError
-            if isinstance(error, commands.CommandInvokeError):
-                event_logger.error(f"Command error in {ctx.command}: {error.__cause__}\n{traceback.format_exc()}")
-                return
+            # Set Sentry context
+            with sentry_sdk.configure_scope() as scope:
+                scope.set_user({"id": ctx.author.id, "username": str(ctx.author)})
+                scope.set_context("command", {
+                    "name": ctx.command.name if ctx.command else "Unknown",
+                    "channel": str(ctx.channel),
+                    "guild": str(ctx.guild)
+                })
+                
+                if isinstance(error, commands.CommandInvokeError):
+                    event_logger.error(f"Command error in {ctx.command}: {error.__cause__}")
+                    sentry_sdk.capture_exception(error.__cause__)
+                    return
 
-            # Handle other errors
-            if isinstance(error, commands.errors.MissingPermissions):
-                await ctx.send("You don't have permission to use this command!")
-            elif isinstance(error, commands.errors.MemberNotFound):
-                await ctx.send("Could not find that member!")
-            else:
-                event_logger.error(f"Unhandled error: {error}\n{traceback.format_exc()}")
+                # Handle other errors
+                if isinstance(error, commands.errors.MissingPermissions):
+                    await ctx.send("You don't have permission to use this command!")
+                elif isinstance(error, commands.errors.MemberNotFound):
+                    await ctx.send("Could not find that member!")
+                else:
+                    event_logger.error(f"Unhandled error: {error}")
+                    sentry_sdk.capture_exception(error)
+
+        @bot.event
+        async def on_error(event, *args, **kwargs):
+            sentry_sdk.capture_message(
+                f"Discord event error in {event}",
+                level="error",
+                extras={
+                    "args": args,
+                    "kwargs": kwargs
+                }
+            )
+            event_logger.error(f"Error in {event}: {traceback.format_exc()}")
 
         @bot.event
         async def on_message(message):

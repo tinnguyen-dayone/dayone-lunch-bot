@@ -2,6 +2,7 @@ import logging
 import psycopg2
 from psycopg2.extras import DictCursor
 import time
+import sentry_sdk
 
 # Create logger for database operations
 db_logger = logging.getLogger('bot.database')
@@ -54,6 +55,7 @@ class DatabaseManager:
             self.conn.commit()
             logging.info("Database tables are set up successfully.")
         except Exception as e:
+            sentry_sdk.capture_exception()
             logging.error(f"Error creating tables: {e}")
             self.conn.rollback()
             raise
@@ -81,6 +83,7 @@ class DatabaseManager:
                 self.conn.commit()
                 return result[0] if result else None
         except Exception as e:
+            sentry_sdk.capture_exception()
             db_logger.error(f"Error in add_or_get_user: {e}")
             self.conn.rollback()
             raise
@@ -224,12 +227,14 @@ class DatabaseManager:
             return cursor.fetchall()
 
     def get_transaction_history(self, user_id):
-        """Get transaction history for user"""
+        """Get unpaid transaction history for user"""
         with self.conn.cursor() as cursor:
             cursor.execute('''
                 SELECT transaction_date, lunch_price, transaction_confirmed
                 FROM transactions 
-                WHERE user_id = %s AND transaction_date IS NOT NULL
+                WHERE user_id = %s 
+                AND transaction_date IS NOT NULL
+                AND paid = FALSE
                 ORDER BY transaction_date DESC
             ''', (user_id,))
             return cursor.fetchall()
