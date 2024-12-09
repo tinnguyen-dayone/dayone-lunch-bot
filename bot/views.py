@@ -54,10 +54,10 @@ class PaymentView(discord.ui.View):
                 await interaction.response.send_message("Only the admin can verify payments!", ephemeral=True)
                 return
 
-            # Database operations...
+            # Mark transaction as confirmed
             db_manager.confirm_transaction(self.transaction_id)
             
-            # Channel cleanup...
+            # Remove old embeds
             async for message in self.channel.history():
                 if message.embeds:
                     try:
@@ -67,9 +67,7 @@ class PaymentView(discord.ui.View):
                     except Exception as e:
                         logging.error(f"Error deleting message: {e}")
 
-            db_manager.reset_user_data(self.user.id)
-
-            # Button state update...
+            # Disable verify button
             try:
                 button.disabled = True
                 await interaction.message.edit(view=self)
