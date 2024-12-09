@@ -34,7 +34,6 @@ jobs:
         id: image-package
         run: |
           echo "image_package=${{ steps.meta.outputs.tags }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
@@ -58,7 +57,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
       - name: Deploy to EC2
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
@@ -79,13 +77,11 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y git
           fi
-
           # Stop and remove existing container if it exists
           if docker ps -a | grep -q dayone-lunch-bot; then
             docker stop dayone-lunch-bot || true
             docker rm dayone-lunch-bot || true
           fi
-
           # Setup repository
           if [ ! -d ~/discord-bot/.git ]; then
             rm -rf ~/discord-bot
@@ -94,21 +90,17 @@ jobs:
             cd ~/discord-bot
             git pull
           fi
-
           EOL
-
           # Append environment-specific part
           cat >> deploy.sh << EOF
-
           # Create .env file
           cat > .env << ENVEOF
           DISCORD_TOKEN=${DISCORD_TOKEN}
           DB_URL=${DB_URL}
           LUNCH_PRICE=${LUNCH_PRICE}
           SENTRY_DSN=${SENTRY_DSN}
-          ENVIRONMENT=production
+          ENVIRONMENT=${ENVIRONMENT}
           ENVEOF
-
           # Deploy bot container
           docker run -d \
             --name dayone-lunch-bot \
@@ -116,15 +108,12 @@ jobs:
             -v \$(pwd)/.env:/app/.env \
             --restart on-failure \
             ${{ needs.build-and-push.outputs.image_package }}
-
           # Verify container is running
           docker ps | grep dayone-lunch-bot || exit 1
           EOF
-
           chmod +x deploy.sh
           scp deploy.sh ubuntu@$SSH_HOST:~/deploy.sh
           ssh ubuntu@$SSH_HOST "bash ~/deploy.sh && rm ~/deploy.sh"
-
       - name: Verify Deployment
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
