@@ -1,5 +1,11 @@
 import discord
 from discord.utils import get
+from database.manager import DatabaseManager
+from config.settings import DB_URL
+import pytz
+
+db_manager = DatabaseManager(DB_URL)
+vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
 async def create_ticket_channel(guild, author, user):
     category = get(guild.categories, name="Lunch Tickets")
@@ -28,38 +34,40 @@ async def create_ticket_channel(guild, author, user):
     return ticket_channel
 
 def create_lunch_ticket_embed(user, price, total_price, unpaid_count, current_date=None, updated=False):
-    if updated:
-        description = "Your lunch ticket has been updated."
-        color = discord.Color.green()
-    else:
-        description = f"New lunch ticket for {user.mention}"
-        color = discord.Color.blue()
+    title = "🍽️ Lunch Payment Details"
+    description = f"Payment details for {user.mention}"
+    color = discord.Color.blue()
     
     embed = discord.Embed(
-        title="🍽️ Lunch Ticket",
+        title=title,
         description=description,
         color=color
     )
     
-    if not updated:
-        embed.add_field(name="Date", value=current_date, inline=True)
-        embed.add_field(name="Lunch Price", value=price, inline=True)
-        embed.add_field(name="Total Unpaid Lunch", value=f"{total_price:.3f} VND", inline=True)
-        embed.add_field(name="Unpaid Transactions", value=str(unpaid_count), inline=True)
+    # Get transaction history formatted as table
+    transactions = db_manager.get_transaction_history(user.id)
+    if transactions:
+        table = "```\nDate/Time              Price      Status\n" + "-" * 45 + "\n"
+        for date, price, confirmed in transactions:
+            # Convert UTC to Vietnam time
+            local_date = date.astimezone(vietnam_tz)
+            status = "paid" if confirmed else "unpaid"
+            formatted_datetime = local_date.strftime("%Y-%m-%d %H:%M")
+            table += f"{formatted_datetime:<20} {price:9} {status}\n"
+        table += "-" * 45 + f"\nTotal: {total_price:.3f} VND"
+        table += "\n```"
+        
         embed.add_field(
-            name="Instructions", 
-            value="1. Take a screenshot of your payment transaction\n2. Upload the payment screenshot and click 'Submit Payment Proof'\n3. Wait for admin verification",
+            name="Transaction History", 
+            value=table,
             inline=False
         )
-        embed.set_footer(text="Please complete the payment within 24 hours")
-    else:
-        embed.add_field(name="Total Unpaid Lunch", value=f"{total_price:.3f} VND", inline=True)
-        embed.add_field(name="Unpaid Transactions", value=str(unpaid_count), inline=True)
-        embed.add_field(
-            name="Instructions", 
-            value="1. Take a screenshot of your payment transaction\n2. Upload the payment screenshot and click 'Submit Payment Proof'\n3. Wait for admin verification",
-            inline=False
-        )
-        embed.set_footer(text="Please complete the payment within 24 hours")
+    
+    embed.add_field(
+        name="Instructions", 
+        value="1. Take a screenshot of your payment transaction\n2. Upload the payment screenshot and click 'Submit Payment Proof'\n3. Wait for admin verification",
+        inline=False
+    )
+    embed.set_footer(text="Please complete the payment within 24 hours")
     
     return embed
