@@ -60,15 +60,30 @@ class DatabaseManager:
 
     def add_or_get_user(self, user_id, username=None):
         """Add a new user or update existing user's username"""
-        with self.conn.cursor() as cursor:
-            cursor.execute('''
-                INSERT INTO users (user_id, username)
-                VALUES (%s, %s)
-                ON CONFLICT (user_id) 
-                DO UPDATE SET username = EXCLUDED.username
-                WHERE users.username IS DISTINCT FROM EXCLUDED.username
-            ''', (user_id, username))
-            self.conn.commit()
+        try:
+            with self.conn.cursor() as cursor:
+                if username:  # Only update if username is provided
+                    cursor.execute('''
+                        INSERT INTO users (user_id, username)
+                        VALUES (%s, %s)
+                        ON CONFLICT (user_id) 
+                        DO UPDATE SET username = EXCLUDED.username
+                        RETURNING username
+                    ''', (user_id, username))
+                else:
+                    cursor.execute('''
+                        INSERT INTO users (user_id)
+                        VALUES (%s)
+                        ON CONFLICT (user_id) DO NOTHING
+                        RETURNING username
+                    ''', (user_id,))
+                result = cursor.fetchone()
+                self.conn.commit()
+                return result[0] if result else None
+        except Exception as e:
+            db_logger.error(f"Error in add_or_get_user: {e}")
+            self.conn.rollback()
+            raise
 
     def create_transaction(self, user_id, price):
         """Create a new transaction for a user"""
@@ -84,8 +99,8 @@ class DatabaseManager:
                 SET total_unpaid = total_unpaid + %s
                 WHERE user_id = %s
             ''', (self._extract_numeric(price), user_id))
-        self.conn.commit()
-        return transaction_id
+            self.conn.commit()
+            return transaction_id
 
     def update_transaction(self, transaction_id, image_url):
         """Update transaction image and mark as submitted"""

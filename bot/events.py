@@ -7,7 +7,7 @@ import traceback
 event_logger = logging.getLogger('bot.events')
 
 from utils.helpers import create_ticket_channel
-from bot.views import user_last_image
+from bot.views import image_store  
 
 def setup_events(bot):
     if not getattr(bot, 'events_setup', False):
@@ -43,7 +43,7 @@ def setup_events(bot):
                 if "ticket-" in message.channel.name and message.author != bot.user:
                     if message.attachments:
                         user_id = message.author.id
-                        user_last_image[user_id] = message.attachments[0]
+                        await image_store.set_image(user_id, message.attachments[0])  # Use image_store instead
                         logging.info(f"Image uploaded by user ID {user_id}.")
             await bot.process_commands(message)
         

@@ -29,11 +29,12 @@ class ImageStore:
         async with self._lock:
             self._images.pop(user_id, None)
 
+# Change from private instance to public export
 image_store = ImageStore()
 
 class PaymentView(discord.ui.View):
     def __init__(self, user: discord.Member, channel: discord.TextChannel, 
-                 admin: discord.Member, transaction_id: int):
+        admin: discord.Member, transaction_id: int):
         super().__init__(timeout=None)
         self.user = user
         self.channel = channel
