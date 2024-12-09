@@ -77,15 +77,21 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y git
           fi
+
+          # Configure Git to use token authentication
+          git config --global credential.helper store
+          echo "https://${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+
           # Stop and remove existing container if it exists
           if docker ps -a | grep -q dayone-lunch-bot; then
             docker stop dayone-lunch-bot || true
             docker rm dayone-lunch-bot || true
           fi
+
           # Setup repository
           if [ ! -d ~/discord-bot/.git ]; then
             rm -rf ~/discord-bot
-            git clone https://github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
+            git clone https://oauth2:${GITHUB_TOKEN}@github.com/tinnguyen-dayone/dayone-lunch-bot.git ~/discord-bot
           else
             cd ~/discord-bot
             git pull
@@ -112,8 +118,9 @@ jobs:
           docker ps | grep dayone-lunch-bot || exit 1
           EOF
           chmod +x deploy.sh
+          # Pass GHCR_PAT as GITHUB_TOKEN to the remote script
           scp deploy.sh ubuntu@$SSH_HOST:~/deploy.sh
-          ssh ubuntu@$SSH_HOST "bash ~/deploy.sh && rm ~/deploy.sh"
+          ssh ubuntu@$SSH_HOST "GITHUB_TOKEN=$GHCR_PAT bash ~/deploy.sh && rm ~/deploy.sh"
       - name: Verify Deployment
         env:
           SSH_HOST: ${{ secrets.EC2_HOST }}
