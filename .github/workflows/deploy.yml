@@ -66,6 +66,8 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DB_URL: ${{ secrets.DB_URL }}
           LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          ENVIRONMENT: production
         run: |
           # Create deployment script
           cat > deploy.sh << 'EOL'
@@ -103,6 +105,8 @@ jobs:
           DISCORD_TOKEN=${DISCORD_TOKEN}
           DB_URL=${DB_URL}
           LUNCH_PRICE=${LUNCH_PRICE}
+          SENTRY_DSN=${SENTRY_DSN}
+          ENVIRONMENT=production
           ENVEOF
 
           # Deploy bot container
