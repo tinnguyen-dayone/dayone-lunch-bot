@@ -4,10 +4,13 @@ on:
   push:
     branches: [main]
 
+env:
+  REGISTRY: ghcr.io
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
+    outputs:
+      image_package: ${{ steps.image-package.outputs.image_package }}
     steps:
       - uses: actions/checkout@v3
 
@@ -21,12 +24,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
 
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+
+      - name: Set IMAGE_PACKAGE
+        id: image-package
+        run: |
+          echo "image_package=${{ steps.meta.outputs.tags }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/dayone-lunch-bot:latest
+          tags: ${{ steps.image-package.outputs.image_package }}
 
   deploy:
     needs: build-and-push
@@ -121,7 +135,7 @@ jobs:
             --network lunch-network \
             -v \$(pwd)/.env:/app/.env \
             --restart on-failure \
-            ghcr.io/tinnguyen-dayone/dayone-lunch-bot:latest
+            ${{ needs.build-and-push.outputs.image_package }}
 
           # Verify container is running
           docker ps | grep dayone-lunch-bot || exit 1
