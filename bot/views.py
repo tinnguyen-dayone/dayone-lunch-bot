@@ -4,6 +4,8 @@ import logging
 from database.manager import DatabaseManager
 from config.settings import DB_URL
 from collections import defaultdict
+import pytz
+from datetime import datetime
 
 db_manager = DatabaseManager(DB_URL)
 
@@ -36,8 +38,7 @@ class PaymentView(discord.ui.View):
             await interaction.response.send_message("Processing your payment submission...", ephemeral=True)
             
             await self.channel.send(
-                content=f"Payment proof submitted by {self.user.mention}\nAdmin {self.admin.mention} please verify.",
-                file=await image.to_file()
+                content=f"Payment proof submitted by {self.user.mention}\nAdmin {self.admin.mention} please verify."
             )
             button.disabled = True
             await interaction.message.edit(view=self)
@@ -53,34 +54,34 @@ class PaymentView(discord.ui.View):
                 await interaction.response.send_message("Only the admin can verify payments!", ephemeral=True)
                 return
 
-            # Confirm the transaction in database first
+            # Database operations...
             db_manager.confirm_transaction(self.transaction_id)
             
-            
-            # Delete all messages in the ticket channel that contain embeds
+            # Channel cleanup...
             async for message in self.channel.history():
                 if message.embeds:
                     try:
                         await message.delete()
                     except (discord.NotFound, discord.Forbidden):
-                        pass  # Skip if message is already deleted
+                        pass
                     except Exception as e:
                         logging.error(f"Error deleting message: {e}")
 
-            # Reset all unpaid transactions for this user
             db_manager.reset_user_data(self.user.id)
 
-            # Try to disable the button, but don't error if message is gone
+            # Button state update...
             try:
                 button.disabled = True
                 await interaction.message.edit(view=self)
             except discord.NotFound:
-                pass  # Message was already deleted, ignore
+                pass
             except Exception as e:
                 logging.error(f"Error updating button state: {e}")
 
-            # Send a final confirmation message in the channel with date
-            current_date = discord.utils.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+            # Get current time in Asia/Ho_Chi_Minh timezone
+            vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+            current_date = datetime.now(vietnam_tz).strftime("%Y-%m-%d %H:%M (GMT+7)")
+            
             await self.channel.send(f"✅ All payments for {self.user.mention} have been verified by {self.admin.mention} on {current_date}.")
 
         except Exception as e:

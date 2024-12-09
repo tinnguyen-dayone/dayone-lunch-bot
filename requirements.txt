@@ -25,6 +25,7 @@ pycparser==2.22
 PyNaCl==1.5.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
+pytz==2024.2
 requests==2.32.3
 ResourceBundle==2.1.0
 s3transfer==0.10.4
@@ -32,7 +33,7 @@ six==1.17.0
 toml==0.10.2
 types-aws-xray-sdk==2.14.0.20240606
 typing_extensions==4.12.2
-urllib3>=1.25.4,<1.27
+urllib3==1.26.20
 watchdog==6.0.0
 wrapt==1.17.0
 yarl==1.18.3
