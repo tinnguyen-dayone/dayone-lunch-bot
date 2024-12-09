@@ -87,36 +87,6 @@ jobs:
             git pull
           fi
 
-          # Install Docker if not available
-          if ! command -v docker &> /dev/null; then
-            curl -fsSL https://get.docker.com -o get-docker.sh
-            sh get-docker.sh
-            sudo usermod -aG docker ubuntu
-            newgrp docker
-          fi
-
-          # Create Docker network if it doesn't exist
-          docker network create lunch-network || true
-
-          # Stop and remove existing containers
-          docker rm -f dayone-lunch-bot || true
-
-          # Run PostgreSQL if not already running
-          if ! docker ps | grep -q dayone-lunch-postgres; then
-            docker run -d \
-              --name dayone-lunch-postgres \
-              --network lunch-network \
-              -e POSTGRESQL_PASSWORD=UbsYkfANm36ezN1PQkcp \
-              -e POSTGRESQL_DATABASE=lunch \
-              -e POSTGRESQL_USERNAME=postgres \
-              -e POSTGRESQL_ENABLE_TLS=false \
-              -e POSTGRESQL_SKIP_SSLMODE=true \
-              -p 5432:5432 \
-              bitnami/postgresql:latest
-          else
-            # Connect existing postgres to network if needed
-            docker network connect lunch-network dayone-lunch-postgres || true
-          fi
           EOL
 
           # Append environment-specific part
