@@ -78,6 +78,12 @@ jobs:
             sudo apt-get install -y git
           fi
 
+          # Stop and remove existing container if it exists
+          if docker ps -a | grep -q dayone-lunch-bot; then
+            docker stop dayone-lunch-bot || true
+            docker rm dayone-lunch-bot || true
+          fi
+
           # Setup repository
           if [ ! -d ~/discord-bot/.git ]; then
             rm -rf ~/discord-bot

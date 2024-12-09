@@ -55,6 +55,9 @@ def setup_commands(bot):
             for user in users:
                 try:
                     cmd_logger.debug(f'Processing comment for user {user.name} with price {price}')
+                    
+                    # Add username when creating/updating user
+                    db_manager.add_or_get_user(user.id, user.name)
                 
                     # Create transaction first to ensure database consistency
                     transaction_id = db_manager.increment_commentation_with_price(user.id, price)

@@ -33,6 +33,7 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
+                    username TEXT,
                     total_unpaid NUMERIC DEFAULT 0.0
                 )
             ''')
@@ -57,14 +58,16 @@ class DatabaseManager:
             self.conn.rollback()
             raise
 
-    def add_or_get_user(self, user_id):
-        """Add a new user or get existing user"""
+    def add_or_get_user(self, user_id, username=None):
+        """Add a new user or update existing user's username"""
         with self.conn.cursor() as cursor:
             cursor.execute('''
-                INSERT INTO users (user_id)
-                VALUES (%s)
-                ON CONFLICT (user_id) DO NOTHING
-            ''', (user_id,))
+                INSERT INTO users (user_id, username)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET username = EXCLUDED.username
+                WHERE users.username IS DISTINCT FROM EXCLUDED.username
+            ''', (user_id, username))
             self.conn.commit()
 
     def create_transaction(self, user_id, price):
