@@ -96,13 +96,15 @@ def setup_commands(bot):
                                     current_date=datetime.now().strftime("%Y-%m-%d")
                                 )
                             
+                                view = PaymentView(user, ticket_channel, ctx.author, transaction_id)
                                 sent_message = await ticket_channel.send(
                                     embed=embed,
-                                    view=PaymentView(user, ticket_channel, ctx.author, transaction_id)
+                                    view=view
                                 )
                             
-                                # Store new message ID
+                                # Store message ID in database
                                 db_manager.set_ticket_message_id(transaction_id, sent_message.id)
+                                view.message = sent_message  # Store message reference in view
                                 processed_users.append(user.name)
                                 cmd_logger.info(f"Successfully processed comment for {user.name}")
 

@@ -69,6 +69,5 @@ def create_lunch_ticket_embed(user, price, total_price, unpaid_count, current_da
         value="1. Take a screenshot of your payment transaction\n2. Upload the payment screenshot and click 'Submit Payment Proof'\n3. Wait for admin verification",
         inline=False
     )
-    embed.set_footer(text="Please complete the payment within 24 hours")
     
     return embed
