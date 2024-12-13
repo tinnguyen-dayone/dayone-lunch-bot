@@ -176,3 +176,8 @@ def setup_events(bot):
             await bot.process_commands(message)
         
         bot.events_setup = True
+
+        @bot.event
+        async def on_shutdown():
+            logging.info("Shutting down the bot...")
+            db_manager.close()

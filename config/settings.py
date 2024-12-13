@@ -15,3 +15,7 @@ if DB_URL:
     DB_URL = f"{DB_URL}?sslmode=disable"
 
 LUNCH_PRICE = os.getenv('LUNCH_PRICE', '55.000 VND')
+
+# Database pool settings
+DB_MIN_CONNECTIONS = int(os.getenv('DB_MIN_CONNECTIONS', '1'))
+DB_MAX_CONNECTIONS = int(os.getenv('DB_MAX_CONNECTIONS', '10'))

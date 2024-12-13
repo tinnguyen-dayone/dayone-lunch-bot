@@ -67,6 +67,8 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_URL = os.getenv('DB_URL')
 LUNCH_PRICE = os.getenv('LUNCH_PRICE', '55.000 VND')
+DB_MIN_CONNECTIONS = int(os.getenv('DB_MIN_CONNECTIONS', 1))
+DB_MAX_CONNECTIONS = int(os.getenv('DB_MAX_CONNECTIONS', 10))
 
 # Log the loaded environment variables for debugging
 logging.info(f"Loaded DISCORD_TOKEN: {'***' if TOKEN else 'Not Set'}")
@@ -87,9 +89,13 @@ async def on_error(event, *args, **kwargs):
     sentry_sdk.capture_exception()
     logging.error(f"Error in {event}: {sys.exc_info()}")
 
-# Initialize database
+# Initialize database with connection pool settings
 try:
-    db_manager = DatabaseManager(DB_URL)
+    db_manager = DatabaseManager(
+        DB_URL,
+        min_conn=DB_MIN_CONNECTIONS,
+        max_conn=DB_MAX_CONNECTIONS
+    )
 except Exception as e:
     logging.error(f"Database connection error: {e}")
     sys.exit(1)

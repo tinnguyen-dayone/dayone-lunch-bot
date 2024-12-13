@@ -1,6 +1,7 @@
 import logging
 import traceback
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import DictCursor
 import time
 import sentry_sdk
@@ -9,59 +10,59 @@ from functools import wraps
 # Create logger for database operations
 db_logger = logging.getLogger('bot.database')
 
-def with_connection(func):
-    """Decorator to ensure database connection is active"""
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            # Try to execute the function
-            return func(self, *args, **kwargs)
-        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-            # If connection error, try to reconnect
-            db_logger.warning(f"Database connection lost, attempting to reconnect: {str(e)}")
-            self.reconnect()
-            # Try one more time after reconnection
-            return func(self, *args, **kwargs)
-    return wrapper
-
 class DatabaseManager:
-    def __init__(self, db_url, retries=10, delay=5):
-        """Initialize database connection with retries"""
-        self.db_url = db_url
-        self.conn = None
-        self.connect(retries, delay)
-        
-    def connect(self, retries=3, delay=5):
-        """Establish database connection with retries"""
-        for attempt in range(1, retries + 1):
-            try:
-                self.conn = psycopg2.connect(self.db_url)
-                self.conn.autocommit = False  # Ensure explicit transaction control
-                logging.info("Database connection established successfully.")
-                break
-            except Exception as e:
-                logging.error(f"Attempt {attempt}: Failed to connect to the database: {e}")
-                if attempt < retries:
-                    logging.info(f"Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                else:
-                    logging.error("All retry attempts failed. Please check your database connection settings.")
-                    raise
+    _instance = None
+    _pool = None
+    
+    def __new__(cls, db_url, min_conn=1, max_conn=10):
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+            cls._instance._initialize_pool(db_url, min_conn, max_conn)
+        return cls._instance
 
-    def reconnect(self):
-        """Reconnect to the database"""
-        if self.conn:
-            try:
-                self.conn.close()
-            except Exception:
-                pass
-        self.connect()
+    def _initialize_pool(self, db_url, min_conn, max_conn):
+        """Initialize the connection pool"""
+        try:
+            self._pool = pool.ThreadedConnectionPool(
+                minconn=min_conn,
+                maxconn=max_conn,
+                dsn=db_url
+            )
+            db_logger.info("Connection pool initialized successfully")
+        except Exception as e:
+            db_logger.error(f"Failed to initialize connection pool: {e}")
+            raise
 
+    def get_connection(self):
+        """Get a connection from the pool"""
+        return self._pool.getconn()
+
+    def return_connection(self, conn):
+        """Return a connection to the pool"""
+        self._pool.putconn(conn)
+
+    def with_connection(func):
+        """Decorator to handle database connections from pool"""
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            conn = None
+            try:
+                conn = self.get_connection()
+                return func(self, *args, conn=conn, **kwargs)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                db_logger.error(f"Database connection error: {e}")
+                raise
+            finally:
+                if conn:
+                    self.return_connection(conn)
+        return wrapper
+
+    # Modify all database methods to use the connection pool
     @with_connection
-    def create_tables(self):
+    def create_tables(self, conn=None):
         """Create necessary database tables"""
         try:
-            cursor = self.conn.cursor()
+            cursor = conn.cursor()
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
@@ -83,19 +84,21 @@ class DatabaseManager:
                     ticket_message_id BIGINT
                 )
             ''')
-            self.conn.commit()
+            conn.commit()
             logging.info("Database tables are set up successfully.")
         except Exception as e:
             sentry_sdk.capture_exception()
             logging.error(f"Error creating tables: {e}")
-            self.conn.rollback()
+            conn.rollback()
             raise
 
+    # Modify other methods similarly to use the connection parameter
+    # Example:
     @with_connection
-    def add_or_get_user(self, user_id, username=None):
+    def add_or_get_user(self, user_id, username=None, conn=None):
         """Add a new user or update existing user's username"""
         try:
-            with self.conn.cursor() as cursor:
+            with conn.cursor() as cursor:
                 if username:  # Only update if username is provided
                     cursor.execute('''
                         INSERT INTO users (user_id, username)
@@ -112,18 +115,18 @@ class DatabaseManager:
                         RETURNING username
                     ''', (user_id,))
                 result = cursor.fetchone()
-                self.conn.commit()
+                conn.commit()
                 return result[0] if result else None
         except Exception as e:
             sentry_sdk.capture_exception()
             db_logger.error(f"Error in add_or_get_user: {e}")
-            self.conn.rollback()
+            conn.rollback()
             raise
 
     @with_connection
-    def create_transaction(self, user_id, price):
+    def create_transaction(self, user_id, price, conn=None):
         """Create a new transaction for a user"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 INSERT INTO transactions (user_id, lunch_price, total_price, commented_count)
                 VALUES (%s, %s, %s, 1)
@@ -135,24 +138,24 @@ class DatabaseManager:
                 SET total_unpaid = total_unpaid + %s
                 WHERE user_id = %s
             ''', (self._extract_numeric(price), user_id))
-            self.conn.commit()
+            conn.commit()
             return transaction_id
 
     @with_connection
-    def update_transaction(self, transaction_id, image_url):
+    def update_transaction(self, transaction_id, image_url, conn=None):
         """Update transaction image and mark as submitted"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 UPDATE transactions
                 SET transaction_image = %s, transaction_date = CURRENT_TIMESTAMP, paid = FALSE
                 WHERE transaction_id = %s
             ''', (image_url, transaction_id))
-        self.conn.commit()
+        conn.commit()
 
     @with_connection
-    def confirm_transaction(self, transaction_id):
+    def confirm_transaction(self, transaction_id, conn=None):
         """Mark transaction as confirmed and paid"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 UPDATE transactions
                 SET transaction_confirmed = TRUE,
@@ -171,12 +174,12 @@ class DatabaseManager:
                     SELECT user_id FROM transactions WHERE transaction_id = %s
                 )
             ''', (total_price, transaction_id))
-        self.conn.commit()
+        conn.commit()
 
     @with_connection
-    def confirm_all_user_transactions(self, user_id):
+    def confirm_all_user_transactions(self, user_id, conn=None):
         """Mark all unpaid transactions for a user as confirmed and paid"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             # Update all unpaid transactions
             cursor.execute('''
                 UPDATE transactions
@@ -191,16 +194,16 @@ class DatabaseManager:
                 SET total_unpaid = 0
                 WHERE user_id = %s
             ''', (user_id,))
-        self.conn.commit()
+        conn.commit()
         logging.info(f"All unpaid transactions confirmed for user {user_id}")
 
     @with_connection
-    def increment_commentation_with_price(self, user_id, price):
+    def increment_commentation_with_price(self, user_id, price, conn=None):
         """Add a new transaction with the given price"""
         try:
             db_logger.debug(f'Adding new transaction for user {user_id} with price {price}')
-            self.add_or_get_user(user_id)
-            transaction_id = self.create_transaction(user_id, price)
+            self.add_or_get_user(user_id, conn=conn)
+            transaction_id = self.create_transaction(user_id, price, conn=conn)
             db_logger.info(f'Successfully created transaction {transaction_id} for user {user_id}')
             return transaction_id
         except Exception as e:
@@ -208,20 +211,20 @@ class DatabaseManager:
             raise
 
     @with_connection
-    def set_ticket_message_id(self, transaction_id, message_id):
+    def set_ticket_message_id(self, transaction_id, message_id, conn=None):
         """Set the ticket message ID for a transaction"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 UPDATE transactions
                 SET ticket_message_id = %s
                 WHERE transaction_id = %s
             ''', (message_id, transaction_id))
-        self.conn.commit()
+        conn.commit()
 
     @with_connection
-    def get_ticket_message_id(self, transaction_id):
+    def get_ticket_message_id(self, transaction_id, conn=None):
         """Retrieve the ticket message ID for a transaction"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT ticket_message_id
                 FROM transactions 
@@ -231,9 +234,9 @@ class DatabaseManager:
             return result[0] if result else None
 
     @with_connection
-    def get_user_transactions(self, user_id):
+    def get_user_transactions(self, user_id, conn=None):
         """Retrieve all transactions for a user"""
-        with self.conn.cursor(cursor_factory=DictCursor) as cursor:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
                 SELECT * FROM transactions
                 WHERE user_id = %s AND paid = FALSE
@@ -242,9 +245,9 @@ class DatabaseManager:
             return cursor.fetchall()
 
     @with_connection
-    def get_transaction_details(self, transaction_id):
+    def get_transaction_details(self, transaction_id, conn=None):
         """Get details of a specific transaction"""
-        with self.conn.cursor(cursor_factory=DictCursor) as cursor:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
                 SELECT * FROM transactions
                 WHERE transaction_id = %s
@@ -252,9 +255,9 @@ class DatabaseManager:
             return cursor.fetchone()
 
     @with_connection
-    def has_unpaid_transactions(self, user_id):
+    def has_unpaid_transactions(self, user_id, conn=None):
         """Check if the user has any unpaid transactions"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT 1 FROM transactions
                 WHERE user_id = %s AND paid = FALSE
@@ -272,17 +275,17 @@ class DatabaseManager:
             return 0.0
 
     @with_connection
-    def reset_user_data(self, user_id):
+    def reset_user_data(self, user_id, conn=None):
         """Reset all data for a user"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('DELETE FROM transactions WHERE user_id = %s', (user_id,))
             cursor.execute('DELETE FROM users WHERE user_id = %s', (user_id,))
-        self.conn.commit()
+        conn.commit()
 
     @with_connection
-    def get_unpaid_transactions(self):
+    def get_unpaid_transactions(self, conn=None):
         """Get all unpaid transactions"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT user_id, commented_count, lunch_price
                 FROM transactions 
@@ -291,9 +294,9 @@ class DatabaseManager:
             return cursor.fetchall()
 
     @with_connection
-    def get_transaction_history(self, user_id):
+    def get_transaction_history(self, user_id, conn=None):
         """Get unpaid transaction history for user"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT transaction_date, lunch_price, transaction_confirmed
                 FROM transactions 
@@ -305,9 +308,9 @@ class DatabaseManager:
             return cursor.fetchall()
 
     @with_connection
-    def has_ticket(self, user_id):
+    def has_ticket(self, user_id, conn=None):
         """Check if the user has an existing ticket"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT 1 FROM transactions 
                 WHERE user_id = %s AND paid = FALSE
@@ -315,9 +318,9 @@ class DatabaseManager:
             return cursor.fetchone() is not None
 
     @with_connection
-    def get_unpaid_total(self, user_id):
+    def get_unpaid_total(self, user_id, conn=None):
         """Calculate the total unpaid transactions for a user"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT SUM(total_price) 
                 FROM transactions
@@ -327,9 +330,9 @@ class DatabaseManager:
             return float(result[0]) if result and result[0] else 0.0
 
     @with_connection
-    def get_unpaid_count(self, user_id):
+    def get_unpaid_count(self, user_id, conn=None):
         """Get the count of unpaid transactions for a user"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT COUNT(*) 
                 FROM transactions
@@ -339,21 +342,19 @@ class DatabaseManager:
             return result[0] if result else 0
 
     def close(self):
-        """Close database connection"""
-        if self.conn:
-            try:
-                self.conn.close()
-            except Exception as e:
-                logging.error(f"Error closing database connection: {e}")
+        """Close the connection pool"""
+        if self._pool:
+            self._pool.closeall()
+            db_logger.info("Connection pool closed")
 
     def __del__(self):
-        """Destructor to ensure database connection is closed"""
+        """Ensure pool is closed on deletion"""
         self.close()
 
     @with_connection
-    def get_user_ticket_message_ids(self, user_id):
+    def get_user_ticket_message_ids(self, user_id, conn=None):
         """Retrieve all ticket message IDs for a user's unpaid transactions"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 SELECT ticket_message_id
                 FROM transactions
@@ -363,9 +364,9 @@ class DatabaseManager:
             return [row[0] for row in results]
 
     @with_connection
-    def get_transaction_by_message_id(self, message_id):
+    def get_transaction_by_message_id(self, message_id, conn=None):
         """Get transaction details by message ID"""
-        with self.conn.cursor(cursor_factory=DictCursor) as cursor:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
                 SELECT *
                 FROM transactions
@@ -374,22 +375,22 @@ class DatabaseManager:
             return cursor.fetchone()
 
     @with_connection
-    def clean_deleted_message_refs(self, message_ids):
+    def clean_deleted_message_refs(self, message_ids, conn=None):
         """Clean up deleted message references from database"""
-        with self.conn.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute('''
                 UPDATE transactions 
                 SET ticket_message_id = NULL
                 WHERE ticket_message_id = ANY(%s)
                 AND paid = FALSE
             ''', (message_ids,))
-        self.conn.commit()
+        conn.commit()
         logging.info(f"Cleaned up {len(message_ids)} deleted message references")
 
     @with_connection
-    def get_active_tickets(self):
+    def get_active_tickets(self, conn=None):
         """Get all active (unpaid) transactions with their message IDs"""
-        with self.conn.cursor(cursor_factory=DictCursor) as cursor:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
                 SELECT DISTINCT ON (t.user_id) 
                     t.*, u.username 
@@ -402,9 +403,9 @@ class DatabaseManager:
             return cursor.fetchall()
 
     @with_connection
-    def get_latest_unpaid_transaction(self, user_id):
+    def get_latest_unpaid_transaction(self, user_id, conn=None):
         """Get user's latest unpaid transaction"""
-        with self.conn.cursor(cursor_factory=DictCursor) as cursor:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
                 SELECT *
                 FROM transactions
