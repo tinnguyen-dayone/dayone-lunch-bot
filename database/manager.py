@@ -76,6 +76,12 @@ class DatabaseManager:
         """Create necessary database tables"""
         try:
             with conn.cursor() as cursor:
+                # Add description column to transactions table
+                cursor.execute('''
+                    ALTER TABLE transactions 
+                    ADD COLUMN IF NOT EXISTS description TEXT
+                ''')
+                
                 # Create users table first
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS users (
@@ -97,7 +103,8 @@ class DatabaseManager:
                         transaction_confirmed BOOLEAN DEFAULT FALSE,
                         transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         paid BOOLEAN DEFAULT FALSE,
-                        ticket_message_id BIGINT
+                        ticket_message_id BIGINT,
+                        description TEXT
                     )
                 ''')
                 
@@ -220,8 +227,8 @@ class DatabaseManager:
         logging.info(f"All unpaid transactions confirmed for user {user_id}")
 
     @with_connection
-    def increment_commentation_with_price(self, user_id, price, conn=None):
-        """Add a new transaction with the given price"""
+    def increment_commentation_with_price(self, user_id, price, description=None, conn=None):
+        """Add a new transaction with the given price and description"""
         try:
             db_logger.debug(f'Adding new transaction for user {user_id} with price {price}')
             # Pass the connection directly to methods
@@ -236,10 +243,10 @@ class DatabaseManager:
                 
                 # Create transaction using the same connection
                 cursor.execute('''
-                    INSERT INTO transactions (user_id, lunch_price, total_price, commented_count)
-                    VALUES (%s, %s, %s, 1)
+                    INSERT INTO transactions (user_id, lunch_price, total_price, commented_count, description)
+                    VALUES (%s, %s, %s, 1, %s)
                     RETURNING transaction_id
-                ''', (user_id, price, self._extract_numeric(price)))
+                ''', (user_id, price, self._extract_numeric(price), description))
                 transaction_id = cursor.fetchone()[0]
                 
                 # Update user's total unpaid
@@ -286,7 +293,9 @@ class DatabaseManager:
         """Retrieve all transactions for a user"""
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
-                SELECT * FROM transactions
+                SELECT transaction_id, transaction_date, lunch_price, total_price, 
+                       transaction_confirmed, paid, description
+                FROM transactions
                 WHERE user_id = %s AND paid = FALSE
                 ORDER BY transaction_date DESC
             ''', (user_id,))
@@ -297,7 +306,10 @@ class DatabaseManager:
         """Get details of a specific transaction"""
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
-                SELECT * FROM transactions
+                SELECT transaction_id, user_id, lunch_price, total_price, 
+                       transaction_image, transaction_confirmed, transaction_date,
+                       paid, ticket_message_id, description
+                FROM transactions
                 WHERE transaction_id = %s
             ''', (transaction_id,))
             return cursor.fetchone()
@@ -335,7 +347,7 @@ class DatabaseManager:
         """Get all unpaid transactions"""
         with conn.cursor() as cursor:
             cursor.execute('''
-                SELECT user_id, commented_count, lunch_price
+                SELECT user_id, commented_count, lunch_price, description
                 FROM transactions 
                 WHERE paid = FALSE
             ''')
@@ -346,7 +358,7 @@ class DatabaseManager:
         """Get unpaid transaction history for user"""
         with conn.cursor() as cursor:
             cursor.execute('''
-                SELECT transaction_date, lunch_price, transaction_confirmed
+                SELECT transaction_date, lunch_price, transaction_confirmed, description
                 FROM transactions 
                 WHERE user_id = %s 
                 AND transaction_date IS NOT NULL
@@ -441,7 +453,8 @@ class DatabaseManager:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
                 SELECT DISTINCT ON (t.user_id) 
-                    t.*, u.username 
+                    t.*, u.username,
+                    t.description
                 FROM transactions t
                 JOIN users u ON t.user_id = u.user_id
                 WHERE t.paid = FALSE 
@@ -455,7 +468,8 @@ class DatabaseManager:
         """Get user's latest unpaid transaction"""
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute('''
-                SELECT *
+                SELECT *,
+                       description
                 FROM transactions
                 WHERE user_id = %s 
                 AND paid = FALSE
