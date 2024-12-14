@@ -1,10 +1,17 @@
 import discord
 from discord.utils import get
 from database.manager import DatabaseManager
-from config.settings import DB_URL
+from config.settings import DB_URL, DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS  # Update imports
 import pytz
+import re
 
-db_manager = DatabaseManager(DB_URL)
+# Initialize database with pool settings
+db_manager = DatabaseManager(
+    DB_URL,
+    min_conn=DB_MIN_CONNECTIONS,
+    max_conn=DB_MAX_CONNECTIONS
+)
+
 vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
 async def create_ticket_channel(guild, author, user):
@@ -12,7 +19,9 @@ async def create_ticket_channel(guild, author, user):
     if not category:
         category = await guild.create_category("Lunch Tickets")
 
-    channel_name = f"ticket-{user.name}"  # Changed to include 'ticket-' prefix
+    # Simple channel name creation
+    channel_name = f"ticket-{user.name}"
+
     existing_channel = get(guild.text_channels, name=channel_name)
     if existing_channel:
         return existing_channel

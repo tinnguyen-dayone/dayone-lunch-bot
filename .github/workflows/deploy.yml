@@ -1,8 +1,12 @@
 name: Deploy to EC2
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch: # Only manual trigger
+    inputs:
+      deploy_message:
+        description: "Deployment message"
+        required: true
+        default: "Manual deployment"
 
 env:
   REGISTRY: ghcr.io
@@ -44,6 +48,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    environment: production # Always use production environment
 
     steps:
       - uses: actions/checkout@v3
@@ -65,7 +70,8 @@ jobs:
           DB_URL: ${{ secrets.DB_URL }}
           LUNCH_PRICE: ${{ secrets.LUNCH_PRICE }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          ENVIRONMENT: production
+          ENVIRONMENT: production # Always set to production
+          DEPLOY_MESSAGE: ${{ github.event.inputs.deploy_message }}
         run: |
           # Create deployment script
           cat > deploy.sh << 'EOL'

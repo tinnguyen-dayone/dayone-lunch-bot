@@ -9,122 +9,87 @@ event_logger = logging.getLogger('bot.events')
 
 from utils.helpers import create_ticket_channel
 from bot.views import image_store, PaymentView
-from database.manager import DatabaseManager  # Add this import
-from config.settings import DB_URL  # Add this import
+from database.manager import DatabaseManager
+from config.settings import DB_URL, DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS  # Update imports
 
-# Add database manager instance
-db_manager = DatabaseManager(DB_URL)
+# Initialize database with pool settings
+db_manager = DatabaseManager(
+    DB_URL,
+    min_conn=DB_MIN_CONNECTIONS,
+    max_conn=DB_MAX_CONNECTIONS
+)
 
 def setup_events(bot):
+    async def process_ticket(ticket):
+        """Process a single ticket and restore its view"""
+        try:
+            # Use bot instance passed to setup_events
+            for guild in bot.guilds:
+                user = guild.get_member(ticket['user_id'])
+                if user:
+                    # Remove leading dot when looking for channel name
+                    username = ticket['username']
+                    if username.startswith('.'):
+                        username = username[1:]
+                    channel_name = f"ticket-{username}"
+                    channel = discord.utils.get(guild.channels, name=channel_name)
+                    
+                    if not channel:  # Try with lowercase if not found
+                        channel_name = f"ticket-{username.lower()}"
+                        channel = discord.utils.get(guild.channels, name=channel_name)
+                    
+                    if channel and isinstance(channel, discord.TextChannel):
+                        try:
+                            message = await channel.fetch_message(ticket['ticket_message_id'])
+                            if message:
+                                # Find an admin
+                                admin = None
+                                for member in channel.members:
+                                    member_perms = channel.permissions_for(member)
+                                    if (member_perms.administrator or member_perms.manage_messages) and member != bot.user:
+                                        admin = member
+                                        break
+                                
+                                if admin:
+                                    view = PaymentView(user, channel, admin, ticket['transaction_id'])
+                                    await message.edit(view=view)
+                                    bot.add_view(view)
+                                    logging.info(f"Restored view for ticket {ticket['transaction_id']}")
+                                else:
+                                    logging.warning(f"No admin found for channel {channel.name}")
+                        except discord.NotFound:
+                            logging.warning(f"Message {ticket['ticket_message_id']} not found in {channel.name}")
+                        except Exception as e:
+                            logging.error(f"Error processing message: {e}")
+                    else:
+                        logging.warning(f"Channel ticket-{ticket['username']} not found")
+                    break
+
+        except Exception as e:
+            logging.error(f"Error processing ticket {ticket['transaction_id']}: {e}")
+            raise
+
     if not getattr(bot, 'events_setup', False):
         @bot.event
         async def on_ready():
             logging.info(f'Logged in as {bot.user.name}')
             
-            # Get all active tickets from database
-            active_tickets = db_manager.get_active_tickets()
-            logging.info(f"Found {len(active_tickets)} active tickets in database")
-            restored_count = 0
-            deleted_messages = []
-            
-            for guild in bot.guilds:
-                # Set up category if needed
-                category = discord.utils.get(guild.categories, name="Lunch Tickets")
-                if not category:
-                    await guild.create_category("Lunch Tickets")
+            try:
+                # Get all active tickets in a single transaction
+                active_tickets = db_manager.get_active_tickets()
+                logging.info(f"Found {len(active_tickets)} active tickets")
+                logging.info("Bot is ready to process tickets.")
                 
-                # Find all ticket channels and store them in a dictionary
-                ticket_channels = {}
-                for channel in guild.channels:
-                    if isinstance(channel, discord.TextChannel) and channel.name.startswith("ticket-"):
-                        # Store both the exact name and a normalized version
-                        ticket_channels[channel.name.lower()] = channel
-                        normalized_name = ''.join(c.lower() for c in channel.name if c.isalnum())
-                        ticket_channels[normalized_name] = channel
-                        logging.info(f"Found ticket channel: {channel.name}")
-                
-                logging.info(f"Found {len(ticket_channels)} ticket channels")
-                
-                # Process active tickets
-                for transaction in active_tickets:
+                # Process each ticket
+                for ticket in active_tickets:
                     try:
-                        username = transaction['username']
-                        # Generate possible channel name variations
-                        possible_channel_names = [
-                            f"ticket-{username}".lower(),
-                            f"ticket-{username.replace(' ', '')}".lower(),
-                            f"ticket-{username.replace(' ', '_')}".lower(),
-                            ''.join(c.lower() for c in f"ticket-{username}" if c.isalnum())
-                        ]
-                        
-                        logging.info(f"Looking for channel with possible names: {possible_channel_names}")
-                        
-                        channel = None
-                        for channel_name in possible_channel_names:
-                            if channel_name in ticket_channels:
-                                channel = ticket_channels[channel_name]
-                                logging.info(f"Found matching channel: {channel.name}")
-                                break
-                        
-                        if channel:
-                            message_id = transaction['ticket_message_id']
-                            if not message_id:
-                                logging.warning(f"No message ID found for transaction in channel {channel.name}")
-                                continue
-                                
-                            logging.info(f"Processing message ID {message_id} in channel {channel.name}")
-                            
-                            try:
-                                message = await channel.fetch_message(message_id)
-                                if message:
-                                    # Get user from transaction details
-                                    user = guild.get_member(transaction['user_id'])
-                                    
-                                    # Find all admins in the channel
-                                    admins = []
-                                    for member in channel.members:
-                                        # Check for both administrator permission and manage messages permission
-                                        member_perms = channel.permissions_for(member)
-                                        if (member_perms.administrator or 
-                                            member_perms.manage_messages) and member != bot.user:
-                                            admins.append(member)
-                                            logging.info(f"Found admin in channel: {member.name}")
-                                    
-                                    # Use the original command author as admin if available
-                                    admin = None
-                                    for admin_member in admins:
-                                        if admin_member.id == transaction.get('admin_id'):
-                                            admin = admin_member
-                                            break
-                                    
-                                    # If original admin not found, use first available admin
-                                    if not admin and admins:
-                                        admin = admins[0]
-                                    
-                                    if user and admin:
-                                        view = PaymentView(user, channel, admin, transaction['transaction_id'])
-                                        await message.edit(view=view)
-                                        bot.add_view(view)
-                                        restored_count += 1
-                                        logging.info(f"Successfully restored view for transaction {transaction['transaction_id']} with admin {admin.name}")
-                                    else:
-                                        logging.warning(f"Could not restore view: user={user is not None}, admin={admin is not None}")
-                            except discord.NotFound:
-                                deleted_messages.append(message_id)
-                                logging.warning(f"Message {message_id} not found in {channel.name}")
-                            except Exception as e:
-                                logging.error(f"Error processing message {message_id}: {str(e)}")
-                        else:
-                            logging.warning(f"No matching channel found for username: {username}")
+                        await process_ticket(ticket)
                     except Exception as e:
-                        logging.error(f"Error processing transaction {transaction['transaction_id']}: {str(e)}")
+                        logging.error(f"Error processing ticket {ticket['transaction_id']}: {e}")
                         continue
-
-            # Clean up deleted message references
-            if deleted_messages:
-                db_manager.clean_deleted_message_refs(deleted_messages)
-
-            logging.info(f"Successfully restored {restored_count} payment views")
+                        
+            except Exception as e:
+                logging.error(f"Error in on_ready: {e}")
 
         @bot.event
         async def on_command_error(ctx, error):

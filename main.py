@@ -1,3 +1,6 @@
+# Import environment settings first
+from config.settings import TOKEN, DB_URL, LUNCH_PRICE, DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS, SENTRY_DSN, ENVIRONMENT
+
 import logging
 import sys
 import os
@@ -25,10 +28,10 @@ sentry_logging = LoggingIntegration(
 
 
 sentry_sdk.init(
-    dsn=os.getenv('SENTRY_DSN'),
+    dsn=SENTRY_DSN,
     traces_sample_rate=1.0,
     profiles_sample_rate=1.0,
-    environment=os.getenv('ENVIRONMENT', 'development'),
+    environment=ENVIRONMENT,
     integrations=[
         sentry_logging
     ],
@@ -51,7 +54,6 @@ bot_logger.setLevel(logging.INFO)
 
 import discord
 from discord.ext import commands
-from dotenv import load_dotenv
 import asyncio
 from datetime import datetime
 import psycopg2
@@ -60,15 +62,6 @@ from bot.views import PaymentView
 from database.manager import DatabaseManager
 from bot.commands import setup_commands
 from bot.events import setup_events
-
-
-# Load environment variables
-load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
-DB_URL = os.getenv('DB_URL')
-LUNCH_PRICE = os.getenv('LUNCH_PRICE', '55.000 VND')
-DB_MIN_CONNECTIONS = int(os.getenv('DB_MIN_CONNECTIONS', 1))
-DB_MAX_CONNECTIONS = int(os.getenv('DB_MAX_CONNECTIONS', 10))
 
 # Log the loaded environment variables for debugging
 logging.info(f"Loaded DISCORD_TOKEN: {'***' if TOKEN else 'Not Set'}")
@@ -79,9 +72,16 @@ logging.info(f"Loaded LUNCH_PRICE: {LUNCH_PRICE}")
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.guilds = True  # Add guild intent
+intents.dm_messages = True  # Add DM messages intent if needed
+intents.guild_messages = True  # Add guild messages intent
 
 # Bot setup
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(
+    command_prefix='!', 
+    intents=intents,
+    case_insensitive=True  # Make commands case-insensitive
+)
 
 # Enhance error tracking
 @bot.event
@@ -96,8 +96,11 @@ try:
         min_conn=DB_MIN_CONNECTIONS,
         max_conn=DB_MAX_CONNECTIONS
     )
+    # Create tables on startup
+    db_manager.create_tables()
+    logging.info("Database tables initialized successfully")
 except Exception as e:
-    logging.error(f"Database connection error: {e}")
+    logging.error(f"Database initialization error: {e}")
     sys.exit(1)
 
 # Pass the db_manager instance to other modules if necessary

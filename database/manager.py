@@ -48,13 +48,26 @@ class DatabaseManager:
             conn = None
             try:
                 conn = self.get_connection()
+                if 'conn' in kwargs:
+                    del kwargs['conn']  # Remove conn if it exists in kwargs
                 return func(self, *args, conn=conn, **kwargs)
             except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-                db_logger.error(f"Database connection error: {e}")
+                db_logger.error(f"Database connection error in {func.__name__}: {e}")
+                if conn:
+                    conn.rollback()
+                raise
+            except Exception as e:
+                db_logger.error(f"Error in {func.__name__}: {e}")
+                if conn:
+                    conn.rollback()
                 raise
             finally:
                 if conn:
-                    self.return_connection(conn)
+                    try:
+                        self.return_connection(conn)
+                    except Exception as e:
+                        db_logger.error(f"Error returning connection to pool: {e}")
+
         return wrapper
 
     # Modify all database methods to use the connection pool
@@ -62,34 +75,43 @@ class DatabaseManager:
     def create_tables(self, conn=None):
         """Create necessary database tables"""
         try:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id BIGINT PRIMARY KEY,
-                    username TEXT,
-                    total_unpaid NUMERIC DEFAULT 0.0
-                )
-            ''')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transactions (
-                    transaction_id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),
-                    commented_count INTEGER DEFAULT 0,
-                    lunch_price TEXT,
-                    total_price NUMERIC DEFAULT 0.0,
-                    transaction_image TEXT,
-                    transaction_confirmed BOOLEAN DEFAULT FALSE,
-                    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    paid BOOLEAN DEFAULT FALSE,
-                    ticket_message_id BIGINT
-                )
-            ''')
-            conn.commit()
-            logging.info("Database tables are set up successfully.")
+            with conn.cursor() as cursor:
+                # Create users table first
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id BIGINT PRIMARY KEY,
+                        username TEXT,
+                        total_unpaid NUMERIC DEFAULT 0.0
+                    )
+                ''')
+                
+                # Create transactions table with foreign key reference
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS transactions (
+                        transaction_id SERIAL PRIMARY KEY,
+                        user_id BIGINT REFERENCES users(user_id),
+                        commented_count INTEGER DEFAULT 0,
+                        lunch_price TEXT,
+                        total_price NUMERIC DEFAULT 0.0,
+                        transaction_image TEXT,
+                        transaction_confirmed BOOLEAN DEFAULT FALSE,
+                        transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        paid BOOLEAN DEFAULT FALSE,
+                        ticket_message_id BIGINT
+                    )
+                ''')
+                
+                # Add any necessary indexes
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_transactions_paid ON transactions(paid);
+                ''')
+                
+                conn.commit()
+                db_logger.info("Database tables and indexes created successfully")
         except Exception as e:
-            sentry_sdk.capture_exception()
-            logging.error(f"Error creating tables: {e}")
             conn.rollback()
+            db_logger.error(f"Error creating database tables: {e}")
             raise
 
     # Modify other methods similarly to use the connection parameter
@@ -202,11 +224,37 @@ class DatabaseManager:
         """Add a new transaction with the given price"""
         try:
             db_logger.debug(f'Adding new transaction for user {user_id} with price {price}')
-            self.add_or_get_user(user_id, conn=conn)
-            transaction_id = self.create_transaction(user_id, price, conn=conn)
-            db_logger.info(f'Successfully created transaction {transaction_id} for user {user_id}')
-            return transaction_id
+            # Pass the connection directly to methods
+            with conn.cursor() as cursor:
+                # Inline the add_or_get_user logic to avoid connection conflicts
+                cursor.execute('''
+                    INSERT INTO users (user_id)
+                    VALUES (%s)
+                    ON CONFLICT (user_id) DO NOTHING
+                    RETURNING username
+                ''', (user_id,))
+                
+                # Create transaction using the same connection
+                cursor.execute('''
+                    INSERT INTO transactions (user_id, lunch_price, total_price, commented_count)
+                    VALUES (%s, %s, %s, 1)
+                    RETURNING transaction_id
+                ''', (user_id, price, self._extract_numeric(price)))
+                transaction_id = cursor.fetchone()[0]
+                
+                # Update user's total unpaid
+                cursor.execute('''
+                    UPDATE users
+                    SET total_unpaid = total_unpaid + %s
+                    WHERE user_id = %s
+                ''', (self._extract_numeric(price), user_id))
+                
+                conn.commit()
+                db_logger.info(f'Successfully created transaction {transaction_id} for user {user_id}')
+                return transaction_id
+                
         except Exception as e:
+            conn.rollback()
             db_logger.error(f'Failed to create transaction for user {user_id}: {str(e)}\n{traceback.format_exc()}')
             raise
 

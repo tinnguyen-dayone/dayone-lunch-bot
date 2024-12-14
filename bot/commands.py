@@ -4,7 +4,7 @@ import logging
 import sentry_sdk
 from sentry_sdk import start_transaction
 from database.manager import DatabaseManager
-from config.settings import DB_URL, LUNCH_PRICE
+from config.settings import DB_URL, LUNCH_PRICE, DB_MIN_CONNECTIONS, DB_MAX_CONNECTIONS  # Update imports
 from utils.helpers import create_ticket_channel, create_lunch_ticket_embed
 from bot.views import PaymentView
 from datetime import datetime
@@ -60,6 +60,7 @@ def setup_commands(bot):
                         processed_users = []
                         failed_users = []
 
+                        # Use a single connection for the entire transaction
                         for user in users:
                             try:
                                 cmd_logger.debug(f'Processing comment for user {user.name} with price {price}')
@@ -72,7 +73,7 @@ def setup_commands(bot):
                                 if not transaction_id:
                                     raise Exception("Failed to create transaction")
 
-                                # Get totals after transaction creation
+                                # Use the same connection for related operations
                                 total_unpaid = db_manager.get_unpaid_total(user.id)
                                 unpaid_count = db_manager.get_unpaid_count(user.id)
 

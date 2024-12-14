@@ -1,18 +1,27 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Get the project root directory
+root_dir = Path(__file__).parent.parent
+
+# Check for .env.local first, then fall back to .env
+env_local = root_dir / '.env.local'
+env_default = root_dir / '.env'
+
+if env_local.exists():
+    load_dotenv(env_local)
+    print("Loaded environment from .env.local")
+else:
+    load_dotenv(env_default)
+    print("Loaded environment from .env")
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 DB_URL = os.getenv('DB_URL')
 SENTRY_DSN = os.getenv('SENTRY_DSN')
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 
-# Always set SSL mode to disable for local Docker network
-if DB_URL:
-    if '?' in DB_URL:
-        DB_URL = DB_URL.split('?')[0]
-    DB_URL = f"{DB_URL}?sslmode=disable"
+DB_URL = os.getenv('DB_URL')
 
 LUNCH_PRICE = os.getenv('LUNCH_PRICE', '55.000 VND')
 
