@@ -56,7 +56,7 @@ def create_lunch_ticket_embed(user, price, total_price, unpaid_count, current_da
     # Get transaction history formatted as table
     transactions = db_manager.get_transaction_history(user.id)
     if transactions:
-        table = "```\nDate/Time              Price      Status     Description\n" + "-" * 60 + "\n"
+        table = "```\nDate/Time            Price     Status    Description\n" + "-" * 56 + "\n"
         for date, price, confirmed, desc in transactions:
             if not confirmed:  # Only show unpaid transactions
                 local_date = date.astimezone(vietnam_tz)
@@ -64,7 +64,7 @@ def create_lunch_ticket_embed(user, price, total_price, unpaid_count, current_da
                 formatted_datetime = local_date.strftime("%Y-%m-%d %H:%M")
                 description = desc[:20] + "..." if desc and len(desc) > 20 else (desc or "")
                 table += f"{formatted_datetime:<20} {price:9} {status:9} {description}\n"
-        table += "-" * 60 + f"\nTotal: {total_price:.3f} VND"
+        table += "-" * 56 + f"\nTotal: {total_price:.3f} VND"
         table += "\n```"
         
         embed.add_field(
